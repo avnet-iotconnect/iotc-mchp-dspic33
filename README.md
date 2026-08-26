@@ -116,18 +116,23 @@ standalone, **not** mounted on the Curiosity board yet.
 ![RNWF11 power jumper](media/rnwf11-jumper.png)
 
 Move the jumper to **PC3V3** and plug the RNWF11's USB-C port directly into
-your PC. Then, from `tools/`:
+your PC. Then, from the `dspic33-rnwf11-quickstart` directory you downloaded
+the files into:
 
 **Linux/macOS:**
 ```bash
+cd tools
 python provision_rnwf11_cert.py --port /dev/ttyACM0 --duid my-device-01 \
     --ca-cert-path amazon-root-ca-1.pem
+cd ..
 ```
 
 **Windows (PowerShell):**
 ```powershell
+Set-Location tools
 .\provision_rnwf11_cert.ps1 -Port COM6 -Duid my-device-01 `
     -CaCertPath amazon-root-ca-1.pem
+Set-Location ..
 ```
 
 Replace `/dev/ttyACM0`/`COM6` with the RNWF11's serial port, and `--ca-cert-path`/`-CaCertPath` with a
@@ -184,22 +189,27 @@ until you complete the next step.
 ## 8. Provision WiFi and /IOTCONNECT Config
 
 With the firmware running and waiting, push WiFi and IoTConnect config to it
-over the same debug console UART:
+over the same debug console UART. From the `dspic33-rnwf11-quickstart`
+directory you downloaded the files into:
 
 **Linux/macOS:**
 ```bash
+cd tools
 python provision_device_config.py --port /dev/ttyACM1 \
     --wifi-ssid "MyNetwork" --wifi-password "MyPassword" \
     --cpid <your CPID> --env <your Environment> --duid my-device-01 \
     --ca-name root-ca --cert-name device-cert --key-name device-key
+cd ..
 ```
 
 **Windows (PowerShell):**
 ```powershell
+Set-Location tools
 .\provision_device_config.ps1 -Port COM5 `
     -WifiSsid "MyNetwork" -WifiPassword "MyPassword" `
     -Cpid <your CPID> -Env <your Environment> -Duid my-device-01 `
     -CaName root-ca -CertName device-cert -KeyName device-key
+Set-Location ..
 ```
 
 Replace `/dev/ttyACM1`/`COM5` with the Curiosity board's debug console port. Your CPID and
