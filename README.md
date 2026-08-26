@@ -116,13 +116,33 @@ standalone, **not** mounted on the Curiosity board yet.
 ![RNWF11 power jumper](media/rnwf11-jumper.png)
 
 Move the jumper to **PC3V3** and plug the RNWF11's USB-C port directly into
-your PC. Then, from the `dspic33-rnwf11-quickstart` directory you downloaded
-the files into:
+your PC.
+
+**Before running the command below**, find the serial port name it just
+enumerated as:
+- **Linux**: run `ls /dev/serial/by-id/` (or `dmesg | tail` right after
+  plugging it in) - look for the RNWF11's MCP2200 USB-to-UART bridge, e.g.
+  `/dev/ttyACM0`.
+- **macOS**: run `ls /dev/cu.*` - look for something like `/dev/cu.usbmodemXXXX`.
+- **Windows**: open Device Manager &rarr; **Ports (COM & LPT)** - look for
+  "MCP2200 USB Serial Port Emulator" and note its `COMx` number.
+
+You'll also need a root/CA certificate matching your IoTConnect account's
+backend (for AWS-backed accounts,
+[Amazon Root CA 1](https://www.amazontrust.com/repository/AmazonRootCA1.pem)
+is the common choice) - download it and note its path.
+
+Then, in the command below, replace `MYDEVICENAME` with the port you just
+found, and `amazon-root-ca-1.pem` with your CA cert's path. `--duid` is a
+Unique ID of your own choosing for this device - you'll reuse it later, both
+when creating the device in IoTConnect and when provisioning WiFi/IoTConnect
+config, so pick something memorable (`my-device-01` here is just an example).
+From the `dspic33-rnwf11-quickstart` directory you downloaded the files into:
 
 **Linux/macOS:**
 ```bash
 cd tools
-python3 provision_rnwf11_cert.py --port /dev/ttyACM0 --duid my-device-01 \
+python3 provision_rnwf11_cert.py --port MYDEVICENAME --duid my-device-01 \
     --ca-cert-path amazon-root-ca-1.pem
 cd ..
 ```
@@ -130,17 +150,10 @@ cd ..
 **Windows (PowerShell):**
 ```powershell
 Set-Location tools
-.\provision_rnwf11_cert.ps1 -Port COM6 -Duid my-device-01 `
+.\provision_rnwf11_cert.ps1 -Port MYDEVICENAME -Duid my-device-01 `
     -CaCertPath amazon-root-ca-1.pem
 Set-Location ..
 ```
-
-Replace `/dev/ttyACM0`/`COM6` with the RNWF11's serial port, and `--ca-cert-path`/`-CaCertPath` with a
-root/CA certificate matching your /IOTCONNECT account's backend (for AWS-backed
-accounts, [Amazon Root CA 1](https://www.amazontrust.com/repository/AmazonRootCA1.pem)
-is the common choice). `--duid` is a Unique ID of your choosing for this
-device - you'll reuse it later, both when creating the device in /IOTCONNECT
-and when provisioning WiFi/IOTCONNECT config.
 
 This generates a self-signed device certificate, prints it to the terminal,
 and uploads the CA cert, device cert, and device key to the RNWF11's own
@@ -189,13 +202,29 @@ until you complete the next step.
 ## 8. Provision WiFi and /IOTCONNECT Config
 
 With the firmware running and waiting, push WiFi and IoTConnect config to it
-over the same debug console UART. From the `dspic33-rnwf11-quickstart`
-directory you downloaded the files into:
+over the same debug console UART.
+
+**Before running the command below**, find the Curiosity board's debug
+console port (its onboard PKOB4/MCP2221A USB-to-UART bridge - a different
+port than the RNWF11's, from the earlier step):
+- **Linux**: run `ls /dev/serial/by-id/` (or `dmesg | tail` right after
+  plugging the board in) - look for something like `/dev/ttyACM1`.
+- **macOS**: run `ls /dev/cu.*` - look for something like `/dev/cu.usbmodemXXXX`.
+- **Windows**: open Device Manager &rarr; **Ports (COM & LPT)** and note its
+  `COMx` number.
+
+Then, in the command below, replace `MYDEVICENAME` with that port. Your CPID
+and Environment are under **Settings &rarr; Key Value** in the IoTConnect
+console. `--duid`/`-Duid` must match the DUID you used earlier when
+generating the certificate and creating the device. The cert/key name
+options must match what `provision_rnwf11_cert.py`/`.ps1` printed when you
+ran it earlier (the defaults shown here match its defaults). From the
+`dspic33-rnwf11-quickstart` directory you downloaded the files into:
 
 **Linux/macOS:**
 ```bash
 cd tools
-python3 provision_device_config.py --port /dev/ttyACM1 \
+python3 provision_device_config.py --port MYDEVICENAME \
     --wifi-ssid "MyNetwork" --wifi-password "MyPassword" \
     --cpid <your CPID> --env <your Environment> --duid my-device-01 \
     --ca-name root-ca --cert-name device-cert --key-name device-key
@@ -205,19 +234,12 @@ cd ..
 **Windows (PowerShell):**
 ```powershell
 Set-Location tools
-.\provision_device_config.ps1 -Port COM5 `
+.\provision_device_config.ps1 -Port MYDEVICENAME `
     -WifiSsid "MyNetwork" -WifiPassword "MyPassword" `
     -Cpid <your CPID> -Env <your Environment> -Duid my-device-01 `
     -CaName root-ca -CertName device-cert -KeyName device-key
 Set-Location ..
 ```
-
-Replace `/dev/ttyACM1`/`COM5` with the Curiosity board's debug console port. Your CPID and
-Environment are under **Settings &rarr; Key Value** in the /IOTCONNECT console.
-`--duid`/`-Duid` must match the DUID you used earlier when generating the
-certificate and creating the device. The cert/key name options must match
-what `provision_rnwf11_cert.py`/`.ps1` printed when you ran it earlier (the
-defaults shown here match its defaults).
 
 This script resolves your device's actual MQTT broker host, username, and
 telemetry topic via /IOTCONNECT's discovery/identity API (using

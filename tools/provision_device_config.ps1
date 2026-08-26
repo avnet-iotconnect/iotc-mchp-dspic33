@@ -72,7 +72,12 @@ function Resolve-ConnectionInfo {
     return $ident.d.p
 }
 
-$identity = Resolve-ConnectionInfo -Cpid $Cpid -Env $Env -Duid $Duid -Platform $Platform
+try {
+    $identity = Resolve-ConnectionInfo -Cpid $Cpid -Env $Env -Duid $Duid -Platform $Platform
+} catch {
+    Write-Host "FAILED: could not resolve device connection info: $_"
+    exit 1
+}
 
 Write-Host "Resolved broker host: $($identity.h)"
 Write-Host "Resolved MQTT username: $(if ($identity.un) { $identity.un } else { '(none)' })"
@@ -94,10 +99,16 @@ $fields = [ordered]@{
 }
 
 Write-Host "`nConnecting to $Port at $Baud baud..."
-$serialPort = New-Object -TypeName System.IO.Ports.SerialPort -ArgumentList @($Port, $Baud, [System.IO.Ports.Parity]::None, 8, [System.IO.Ports.StopBits]::One)
-$serialPort.NewLine = "`n"
-$serialPort.ReadTimeout = 5000
-$serialPort.Open()
+try {
+    $serialPort = New-Object -TypeName System.IO.Ports.SerialPort -ArgumentList @($Port, $Baud, [System.IO.Ports.Parity]::None, 8, [System.IO.Ports.StopBits]::One)
+    $serialPort.NewLine = "`n"
+    $serialPort.ReadTimeout = 5000
+    $serialPort.Open()
+} catch {
+    Write-Host "FAILED: could not open $Port`: $_"
+    exit 1
+}
+
 try {
     Start-Sleep -Milliseconds 200  # let the port settle before writing
 
@@ -111,18 +122,18 @@ try {
     try {
         $response = $serialPort.ReadLine().Trim()
     } catch [System.TimeoutException] {
-        Write-Host "Device reported an error: (no response - check the port/baud rate)"
+        Write-Host "FAILED: device reported an error: (no response - check the port/baud rate)"
         exit 1
     }
 
     if ($response -eq "OK") {
         Write-Host "Device confirmed: OK"
     } else {
-        Write-Host "Device reported an error: $response"
+        Write-Host "FAILED: device reported an error: $response"
         exit 1
     }
 } finally {
     $serialPort.Close()
 }
 
-Write-Host "Provisioning complete. The device should now connect to WiFi and IoTConnect."
+Write-Host "SUCCESS: device provisioned. It should now connect to WiFi and IoTConnect."

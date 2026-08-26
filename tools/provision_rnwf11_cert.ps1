@@ -189,26 +189,35 @@ function Send-FileToRnwf {
     Write-Host "$FileName uploaded OK"
 }
 
-$cert = New-DeviceCert -Duid $Duid -OutDir $OutDir
-
 if (-not (Test-Path $CaCertPath)) {
-    Write-Host "CA cert not found: $CaCertPath"
+    Write-Host "FAILED: CA cert not found: $CaCertPath"
     exit 1
 }
 
-Write-Host "`nConnecting to RNWF11 at $Port ($Baud baud)..."
-$serialPort = New-Object -TypeName System.IO.Ports.SerialPort -ArgumentList @($Port, $Baud, [System.IO.Ports.Parity]::None, 8, [System.IO.Ports.StopBits]::One)
-$serialPort.Open()
 try {
-    Send-AtCommand -SerialPort $serialPort -Command "AT" | Out-Null  # sanity check the module responds
+    $cert = New-DeviceCert -Duid $Duid -OutDir $OutDir
 
-    Send-FileToRnwf -SerialPort $serialPort -FileType $FILETYPE_CERT -FileName $CaName -Data ([System.IO.File]::ReadAllBytes($CaCertPath))
-    Send-FileToRnwf -SerialPort $serialPort -FileType $FILETYPE_CERT -FileName $CertName -Data ([System.IO.File]::ReadAllBytes($cert.CertPath))
-    Send-FileToRnwf -SerialPort $serialPort -FileType $FILETYPE_PRIKEY -FileName $KeyName -Data ([System.IO.File]::ReadAllBytes($cert.KeyPath))
-} finally {
-    $serialPort.Close()
+    Write-Host "`nConnecting to RNWF11 at $Port ($Baud baud)..."
+    $serialPort = New-Object -TypeName System.IO.Ports.SerialPort -ArgumentList @($Port, $Baud, [System.IO.Ports.Parity]::None, 8, [System.IO.Ports.StopBits]::One)
+    $serialPort.Open()
+    try {
+        Send-AtCommand -SerialPort $serialPort -Command "AT" | Out-Null  # sanity check the module responds
+
+        Send-FileToRnwf -SerialPort $serialPort -FileType $FILETYPE_CERT -FileName $CaName -Data ([System.IO.File]::ReadAllBytes($CaCertPath))
+        Send-FileToRnwf -SerialPort $serialPort -FileType $FILETYPE_CERT -FileName $CertName -Data ([System.IO.File]::ReadAllBytes($cert.CertPath))
+        Send-FileToRnwf -SerialPort $serialPort -FileType $FILETYPE_PRIKEY -FileName $KeyName -Data ([System.IO.File]::ReadAllBytes($cert.KeyPath))
+    } finally {
+        $serialPort.Close()
+    }
+} catch {
+    # Covers openssl failing (New-DeviceCert throws), a bad/busy port (Open()
+    # throws), and the throws in Send-AtCommand/Send-FileToRnwf/Send-XmodemFile
+    # on AT/XMODEM failures - surfaced as one clear failure message.
+    Write-Host "`nFAILED: $_"
+    exit 1
 }
 
-Write-Host "`nDone. Move the RNWF11's power jumper back to HOST3V3, mount it on the"
+Write-Host "`nSUCCESS: cert, key, and CA cert are all uploaded to the RNWF11."
+Write-Host "Move the RNWF11's power jumper back to HOST3V3, mount it on the"
 Write-Host "Curiosity board's mikroBUS A, and run provision_device_config.ps1 next."
 Write-Host "Pass these filenames to it: -CaName $CaName -CertName $CertName -KeyName $KeyName"

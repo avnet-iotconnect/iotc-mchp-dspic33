@@ -120,23 +120,32 @@ def main():
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    cert_path, key_path = gencert(args.duid, out_dir)
 
     ca_path = Path(args.ca_cert_path)
     if not ca_path.is_file():
-        print(f"CA cert not found: {ca_path}")
+        print(f"FAILED: CA cert not found: {ca_path}")
         sys.exit(1)
 
-    print(f"\nConnecting to RNWF11 at {args.port} ({args.baud} baud)...")
-    with serial.Serial(args.port, args.baud, timeout=5) as ser:
-        link = RnwfAtLink(ser)
-        link.send_at("AT")  # sanity check the module responds before doing anything else
+    try:
+        cert_path, key_path = gencert(args.duid, out_dir)
 
-        link.upload_file(FILETYPE_CERT, args.ca_name, ca_path.read_bytes())
-        link.upload_file(FILETYPE_CERT, args.cert_name, cert_path.read_bytes())
-        link.upload_file(FILETYPE_PRIKEY, args.key_name, key_path.read_bytes())
+        print(f"\nConnecting to RNWF11 at {args.port} ({args.baud} baud)...")
+        with serial.Serial(args.port, args.baud, timeout=5) as ser:
+            link = RnwfAtLink(ser)
+            link.send_at("AT")  # sanity check the module responds before doing anything else
 
-    print("\nDone. Move the RNWF11's power jumper back to HOST3V3, mount it on the")
+            link.upload_file(FILETYPE_CERT, args.ca_name, ca_path.read_bytes())
+            link.upload_file(FILETYPE_CERT, args.cert_name, cert_path.read_bytes())
+            link.upload_file(FILETYPE_PRIKEY, args.key_name, key_path.read_bytes())
+    except Exception as e:
+        # Covers subprocess.CalledProcessError (openssl failing), serial.SerialException
+        # (bad/busy port), and the RuntimeErrors RnwfAtLink raises on AT/XMODEM failures -
+        # surfaced as one clear failure message instead of a raw traceback.
+        print(f"\nFAILED: {e}")
+        sys.exit(1)
+
+    print("\nSUCCESS: cert, key, and CA cert are all uploaded to the RNWF11.")
+    print("Move the RNWF11's power jumper back to HOST3V3, mount it on the")
     print("Curiosity board's mikroBUS A, and run provision_device_config.py next.")
     print(f"Pass these filenames to it: --ca-name {args.ca_name} --cert-name {args.cert_name} --key-name {args.key_name}")
 

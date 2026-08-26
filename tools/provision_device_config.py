@@ -46,7 +46,7 @@ def send_provisioning_protocol(ser: serial.Serial, fields: dict):
     if response == "OK":
         print("Device confirmed: OK")
         return True
-    print(f"Device reported an error: {response or '(no response - check the port/baud rate)'}")
+    print(f"FAILED: device reported an error: {response or '(no response - check the port/baud rate)'}")
     return False
 
 
@@ -68,7 +68,7 @@ def main():
     try:
         identity = resolve_connection_info(args.cpid, args.env, args.duid, args.platform)
     except DeviceConfigError as e:
-        print(f"Failed to resolve device connection info: {e}")
+        print(f"FAILED: could not resolve device connection info: {e}")
         sys.exit(1)
 
     print(f"Resolved broker host: {identity.host}")
@@ -91,12 +91,16 @@ def main():
     }
 
     print(f"Connecting to {args.port} at {args.baud} baud...")
-    with serial.Serial(args.port, args.baud, timeout=5) as ser:
-        time.sleep(0.2)  # let the port settle before writing
-        if not send_provisioning_protocol(ser, fields):
-            sys.exit(1)
+    try:
+        with serial.Serial(args.port, args.baud, timeout=5) as ser:
+            time.sleep(0.2)  # let the port settle before writing
+            if not send_provisioning_protocol(ser, fields):
+                sys.exit(1)
+    except serial.SerialException as e:
+        print(f"FAILED: could not open {args.port}: {e}")
+        sys.exit(1)
 
-    print("Provisioning complete. The device should now connect to WiFi and IoTConnect.")
+    print("SUCCESS: device provisioned. It should now connect to WiFi and IoTConnect.")
 
 
 if __name__ == "__main__":
