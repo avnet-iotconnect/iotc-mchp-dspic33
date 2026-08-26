@@ -122,7 +122,7 @@ the files into:
 **Linux/macOS:**
 ```bash
 cd tools
-python provision_rnwf11_cert.py --port /dev/ttyACM0 --duid my-device-01 \
+python3 provision_rnwf11_cert.py --port /dev/ttyACM0 --duid my-device-01 \
     --ca-cert-path amazon-root-ca-1.pem
 cd ..
 ```
@@ -195,7 +195,7 @@ directory you downloaded the files into:
 **Linux/macOS:**
 ```bash
 cd tools
-python provision_device_config.py --port /dev/ttyACM1 \
+python3 provision_device_config.py --port /dev/ttyACM1 \
     --wifi-ssid "MyNetwork" --wifi-password "MyPassword" \
     --cpid <your CPID> --env <your Environment> --duid my-device-01 \
     --ca-name root-ca --cert-name device-cert --key-name device-key
