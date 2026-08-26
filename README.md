@@ -55,8 +55,7 @@ You don't need to clone this repository - download just the files this
 quickstart uses. Pick the block matching your provisioning script choice
 (Python or PowerShell) from [Prerequisites](#1-prerequisites):
 
-<details>
-<summary><b>Linux/macOS (bash), Python scripts</b></summary>
+### Linux/macOS (bash), Python scripts:
 
 ```bash
 mkdir dspic33-rnwf11-quickstart && cd dspic33-rnwf11-quickstart
@@ -67,7 +66,7 @@ mkdir tools && cd tools
 curl -fsSLO "$RAW/tools/provision_rnwf11_cert.py"
 curl -fsSLO "$RAW/tools/provision_device_config.py"
 curl -fsSLO "$RAW/tools/requirements.txt"
-pip install -r requirements.txt || pip install --break-system-packages -r requirements.txt
+pip install -r requirements.txt 2>/dev/null || pip install --break-system-packages -r requirements.txt
 cd ..
 ```
 
@@ -77,10 +76,7 @@ cd ..
 > fallback above handles that. If you'd rather not touch the system Python at
 > all, use a virtual environment instead: `python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt`.
 
-</details>
-
-<details>
-<summary><b>Windows (PowerShell), PowerShell scripts</b></summary>
+### Windows (PowerShell), PowerShell scripts:
 
 ```powershell
 New-Item -ItemType Directory dspic33-rnwf11-quickstart | Out-Null
@@ -95,8 +91,6 @@ Invoke-WebRequest "$Raw/tools/provision_rnwf11_cert.ps1" -OutFile provision_rnwf
 Invoke-WebRequest "$Raw/tools/provision_device_config.ps1" -OutFile provision_device_config.ps1
 Set-Location ..
 ```
-
-</details>
 
 The rest of this README refers to files by these same relative paths
 (`templates/...`, `bin/...`, `tools/...`), whether you downloaded them
