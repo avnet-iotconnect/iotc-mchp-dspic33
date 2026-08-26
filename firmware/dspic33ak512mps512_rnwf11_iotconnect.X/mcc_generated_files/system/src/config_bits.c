@@ -13,7 +13,7 @@
 */
 
 /*
-© [2026] Microchip Technology Inc. and its subsidiaries.
+ï¿½ [2026] Microchip Technology Inc. and its subsidiaries.
 
     Subject to your compliance with these terms, you may use Microchip 
     software and any derivatives exclusively with Microchip products. 
@@ -42,7 +42,7 @@
 
 // FICD
 #pragma config FICD_JTAGEN = OFF    //JTAG enable bit.->JTAG is disabled.
-#pragma config FICD_NOBTSWP = OFF    //BOOTSWP instruction disable bit->BOOTSWP instruction is disabled
+#pragma config FICD_NOBTSWP = BTSWP_DISABLED    //BOOTSWP instruction disable bit->BOOTSWP instruction is disabled (renamed from OFF in newer dsPIC33AK-MP_DFP releases)
 
 // FDEVOPT
 #pragma config FDEVOPT_ALTI2C1 = OFF    //Alternate I2C1 pins selection bit.->Primary I2C1 pins are used.
@@ -54,7 +54,7 @@
 // FWDT
 #pragma config FWDT_WINDIS = ON    //Watchdog Timer Window Disable bit->Watchdog Timer operates in Non-Window mode
 #pragma config FWDT_SWDTMPS = PS2147483648    //Sleep Mode Watchdog Timer Post Scaler select bits->1:2147483648
-#pragma config FWDT_RCLKSEL = BFRC256    //Watchdog Timer Clock Select bits->WDT Run Mode uses BFRC:256
+#pragma config FWDT_RCLKSEL = BFRC244    //Watchdog Timer Clock Select bits->WDT Run Mode uses BFRC:244 (renamed from BFRC256 in newer dsPIC33AK-MP_DFP releases)
 #pragma config FWDT_RWDTPS = PS2147483648    //Run Mode Watchdog Timer Post Scaler select bits->1:2147483648
 #pragma config FWDT_WDTWIN = WIN25    //Watchdog Timer Window Select bits->WDT Window is 25% of WDT period
 #pragma config FWDT_WDTEN = SW    //Watchdog Timer Enable bit->WDT is controlled by software, use WDTCON.ON bit

@@ -1,0 +1,1 @@
+ -c -mcpu=$(MP_PROCESSOR_OPTION)  -omf=elf -DXPRJ_default=$(CND_CONF)    -Wa,-g,--no-relax$(MP_EXTRA_AS_POST)  -mdfp="${DFP_DIR}/xc16"/home/zack/VS-projects/iotc-mchp-dspic33/firmware/dspic33ak512mps512_rnwf11_iotconnect.X/mcc_generated_files/system/src/dmt_asm.s

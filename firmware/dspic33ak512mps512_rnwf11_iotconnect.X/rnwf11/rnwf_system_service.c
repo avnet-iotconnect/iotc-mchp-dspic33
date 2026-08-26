@@ -53,6 +53,7 @@ easy and quick applciation development.
 #include <stdio.h>
 #include <string.h>
 
+#include "../timer/delay.h" // ported: added - this file calls DELAY_microseconds()/DELAY_milliseconds() but never included its prototypes (built with implicit-declaration warnings otherwise)
 #include "rnwf_interface.h"
 #include "rnwf_system_service.h"
 #ifdef RNWF11_SERVICE

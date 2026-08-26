@@ -17,12 +17,15 @@ IoTConnect every 10 seconds.
 
 1. [Introduction](#1-introduction)
 2. [Prerequisites](#2-prerequisites)
-3. [Hardware Setup](#3-hardware-setup)
-4. [Provisioning](#4-provisioning)
-5. [Build and Flash the Firmware](#5-build-and-flash-the-firmware)
-6. [Running the Demo](#6-running-the-demo)
-7. [How It Works](#7-how-it-works)
-8. [Resources](#8-resources)
+3. [Step 1: Import the Device Template](#3-step-1-import-the-device-template)
+4. [Step 2: Generate and Upload the Device Certificate](#4-step-2-generate-and-upload-the-device-certificate)
+5. [Step 3: Create the Device in IoTConnect](#5-step-3-create-the-device-in-iotconnect)
+6. [Step 4: Mount the RNWF11 on the Curiosity Board](#6-step-4-mount-the-rnwf11-on-the-curiosity-board)
+7. [Step 5: Build and Flash the Firmware](#7-step-5-build-and-flash-the-firmware)
+8. [Step 6: Provision WiFi and IoTConnect Config](#8-step-6-provision-wifi-and-iotconnect-config)
+9. [Running the Demo](#9-running-the-demo)
+10. [How It Works](#10-how-it-works)
+11. [Resources](#11-resources)
 
 ## 1. Introduction
 
@@ -38,6 +41,12 @@ working before coming back here.
 > drops the touch/CAN/RGB-LED sample peripherals, since this quickstart only
 > needs UART.
 
+The steps below are in the order you actually need to do them: the device
+certificate has to exist before you can create the device in IoTConnect, the
+RNWF11 has to be provisioned with that certificate *before* it's mounted on
+the Curiosity board, and the firmware has to already be flashed and running
+before the final config-provisioning step can talk to it.
+
 ## 2. Prerequisites
 
 ### Hardware
@@ -50,51 +59,38 @@ working before coming back here.
 ### Software
 
 1. [MPLAB X IDE](https://www.microchip.com/mplabx) 6.25 or later, with the XC-DSC compiler 3.21 or later and the `dsPIC33AK-MP_DFP` device pack (same toolchain as the OOB demo)
-2. Python 3.9+ with `openssl` on your `PATH`, for the provisioning scripts in [`tools/`](tools/)
+2. Python 3.9+ with `openssl` on your `PATH`
 3. A serial terminal (PuTTY, Tera Term, MPLAB Data Visualizer's terminal, etc.) to watch the device's console output
 4. An [IoTConnect](https://www.iotconnect.io/) account
 
-## 3. Hardware Setup
-
-The RNWF11 add-on board is mikroBUS-compliant, and the Curiosity board breaks
-out two mikroBUS sockets. This firmware is wired for **mikroBUS A**
-specifically (UART2 on RP72/RP73, mapped via Peripheral Pin Select in
-`mcc_generated_files/system/src/pins.c`) - mount the RNWF11 there.
-
-<!-- TODO: photo of the RNWF11 mounted on mikroBUS A -->
-![RNWF11 mounted on mikroBUS A](media/rnwf11-mounted.png)
-
-> [!IMPORTANT]
-> The RNWF11 board has its own USB-C port and power-select jumper
-> (`PC3V3` / `HOST3V3`), independent of the Curiosity board. You'll use both
-> positions during provisioning - see [Section 4](#4-provisioning).
-
-<!-- TODO: close-up photo of the RNWF11's power jumper, labeled with both positions -->
-![RNWF11 power jumper](media/rnwf11-jumper.png)
-
-## 4. Provisioning
-
-Provisioning is a one-time (per device) two-step process. Both scripts live
-in [`tools/`](tools/):
+Install the provisioning scripts' Python dependencies once, up front:
 
 ```bash
 cd tools
 pip install -r requirements.txt
 ```
 
-### 4.1 Create the device in IoTConnect
+## 3. Step 1: Import the Device Template
 
-<!-- TODO: screenshots of importing templates/dspic33-rnwf11-quickstart-template.json
-     and creating a device with "Use my certificate", matching the style of
-     the UI-ONBOARD.md walkthrough in iotc-python-lite-sdk-demos -->
+<!-- TODO: screenshot of importing templates/dspic33-rnwf11-quickstart-template.json,
+     matching the style of the UI-ONBOARD.md walkthrough in iotc-python-lite-sdk-demos -->
 
-1. In the IoTConnect console, go to **Device &rarr; Templates** and import [`templates/dspic33-rnwf11-quickstart-template.json`](templates/dspic33-rnwf11-quickstart-template.json).
-2. Go to **Device &rarr; Devices** and create a new device using that template, with **"Use my certificate"** as the authentication type and a Unique ID (DUID) of your choosing - you'll use this DUID as `--duid` in both provisioning scripts below. You don't have the certificate yet; you'll paste it in after step 4.2 generates it.
+In the IoTConnect console, go to **Device &rarr; Templates** and import
+[`templates/dspic33-rnwf11-quickstart-template.json`](templates/dspic33-rnwf11-quickstart-template.json).
+You'll select this template when creating the device in
+[Step 3](#5-step-3-create-the-device-in-iotconnect).
 
-### 4.2 Upload the cert/key to the RNWF11
+## 4. Step 2: Generate and Upload the Device Certificate
 
-Move the RNWF11's power jumper to **PC3V3** and plug its USB-C port directly
-into your PC (not mounted on the Curiosity board yet).
+The RNWF11 board has its own USB-C port and power-select jumper
+(`PC3V3` / `HOST3V3`), independent of the Curiosity board - this step uses it
+standalone, **not** mounted on the Curiosity board yet.
+
+<!-- TODO: close-up photo of the RNWF11's power jumper, labeled with both positions -->
+![RNWF11 power jumper](media/rnwf11-jumper.png)
+
+Move the jumper to **PC3V3** and plug the RNWF11's USB-C port directly into
+your PC. Then, from `tools/`:
 
 ```bash
 python provision_rnwf11_cert.py --port COM6 --duid my-device-01 \
@@ -104,20 +100,50 @@ python provision_rnwf11_cert.py --port COM6 --duid my-device-01 \
 Replace `COM6` with the RNWF11's serial port, and `--ca-cert-path` with a
 root/CA certificate matching your IoTConnect account's backend (for AWS-backed
 accounts, [Amazon Root CA 1](https://www.amazontrust.com/repository/AmazonRootCA1.pem)
-is the common choice).
+is the common choice). `--duid` is a Unique ID of your choosing for this
+device - you'll reuse it in Steps 3 and 6.
 
 This generates a self-signed device certificate, prints it to the terminal,
 and uploads the CA cert, device cert, and device key to the RNWF11's own
-filesystem via `AT+FS`. Paste the printed certificate into the IoTConnect
-console to finish creating the device from step 4.1.
+filesystem via `AT+FS`. Keep the terminal output around - you'll paste the
+printed certificate into the IoTConnect console in the next step.
 
-Once it finishes, move the jumper back to **HOST3V3** and mount the RNWF11 on
-the Curiosity board's mikroBUS A.
+## 5. Step 3: Create the Device in IoTConnect
 
-### 4.3 Push WiFi + IoTConnect config to the dsPIC33
+<!-- TODO: screenshot of creating a device with "Use my certificate", pasting
+     in the certificate printed by provision_rnwf11_cert.py -->
 
-Flash and power up the firmware first (see [Section 5](#5-build-and-flash-the-firmware))
-- it will print `Not provisioned yet.` on its debug console and wait. Then:
+Go to **Device &rarr; Devices** and create a new device using the template
+from Step 1, with **"Use my certificate"** as the authentication type, the
+same Unique ID (DUID) you passed to `provision_rnwf11_cert.py` in Step 2, and
+the certificate that script printed.
+
+## 6. Step 4: Mount the RNWF11 on the Curiosity Board
+
+Move the RNWF11's power jumper back to **HOST3V3**, then mount it on the
+Curiosity board's **mikroBUS A** socket specifically - this firmware is wired
+for that socket (UART2 on RP72/RP73, mapped via Peripheral Pin Select in
+`mcc_generated_files/system/src/pins.c`).
+
+<!-- TODO: photo of the RNWF11 mounted on mikroBUS A -->
+![RNWF11 mounted on mikroBUS A](media/rnwf11-mounted.png)
+
+## 7. Step 5: Build and Flash the Firmware
+
+1. Open [`firmware/dspic33ak512mps512_rnwf11_iotconnect.X`](firmware/dspic33ak512mps512_rnwf11_iotconnect.X) in MPLAB X.
+2. Clean and build the project.
+3. Program the board via the onboard PKOB4 debugger (Make and Program Device).
+4. Open a serial terminal on the debug console port (UART1, 115200 8-N-1) to watch the boot log.
+
+<!-- TODO: screenshot of a successful build in MPLAB X -->
+
+The firmware will print `Not provisioned yet.` and wait - that's expected
+until you complete the next step.
+
+## 8. Step 6: Provision WiFi and IoTConnect Config
+
+With the firmware running and waiting (Step 5), push WiFi and IoTConnect
+config to it over the same debug console UART:
 
 ```bash
 python provision_device_config.py --port COM5 \
@@ -128,43 +154,34 @@ python provision_device_config.py --port COM5 \
 
 Replace `COM5` with the Curiosity board's debug console port. Your CPID and
 Environment are under **Settings &rarr; Key Value** in the IoTConnect console.
-The `--ca-name`/`--cert-name`/`--key-name` values must match what
-`provision_rnwf11_cert.py` printed at the end of step 4.2 (the defaults shown
-here match its defaults).
+`--duid` must match Steps 2 and 3. The `--ca-name`/`--cert-name`/`--key-name`
+values must match what `provision_rnwf11_cert.py` printed at the end of
+Step 2 (the defaults shown here match its defaults).
 
 This script resolves your device's actual MQTT broker host, username, and
 telemetry topic via IoTConnect's discovery/identity API (using
 [`iotconnect-sdk-lite`](https://pypi.org/project/iotconnect-sdk-lite/)'s
 public `DeviceRestApi`, the same mechanism the other quickstarts in this
-family use), then writes everything into the dsPIC33's on-chip flash over its
-console UART.
+family use - this only succeeds once the device exists in IoTConnect, which
+is why Step 3 has to come first), then writes everything into the dsPIC33's
+on-chip flash over its console UART.
 
 > [!NOTE]
 > The broker host/topic are resolved once, here, rather than re-resolved by
-> the firmware on every boot - see [Section 7](#7-how-it-works) for why. If
+> the firmware on every boot - see [Section 10](#10-how-it-works) for why. If
 > IoTConnect ever reassigns your device to a different broker, re-run this
 > script.
 
-## 5. Build and Flash the Firmware
+## 9. Running the Demo
 
-1. Open [`firmware/dspic33ak512mps512_rnwf11_iotconnect.X`](firmware/dspic33ak512mps512_rnwf11_iotconnect.X) in MPLAB X.
-2. Clean and build the project.
-3. Program the board via the onboard PKOB4 debugger (Make and Program Device).
-4. Open a serial terminal on the debug console port (UART1, 115200 8-N-1) to watch the boot log.
-
-<!-- TODO: screenshot of a successful build in MPLAB X -->
-
-## 6. Running the Demo
-
-Once provisioned (Section 4) and flashed (Section 5), the device connects to
-WiFi, then to IoTConnect over MQTT via the RNWF11, and publishes
-`{"random": <0-100>}` every 10 seconds. Watch it arrive on the device's
-**Live Data** tab in the IoTConnect console.
+Once Step 6 completes, the device connects to WiFi, then to IoTConnect over
+MQTT via the RNWF11, and publishes `{"random": <0-100>}` every 10 seconds.
+Watch it arrive on the device's **Live Data** tab in the IoTConnect console.
 
 <!-- TODO: screenshot of the console debug log showing a successful connect + publish -->
 <!-- TODO: screenshot of the IoTConnect Live Data tab showing incoming "random" values -->
 
-## 7. How It Works
+## 10. How It Works
 
 ```
 dsPIC33AK512MPS512                RNWF11                      IoTConnect
@@ -200,7 +217,7 @@ dsPIC33AK512MPS512                RNWF11                      IoTConnect
   commands. `tools/provision_device_config.py` does that resolution once, on
   the PC, and bakes the result into the device's flash instead.
 
-## 8. Resources
+## 11. Resources
 
 - [dsPIC33A Curiosity OOB Demo](https://github.com/microchip-pic-avr-examples/dspic33a-curiosity-oob) - the base this project's clock/pin configuration borrows from
 - [RNWF11 UART to Cloud Add-on Board User's Guide](https://ww1.microchip.com/downloads/aemDocuments/documents/WSG/ProductDocuments/UserGuides/RNWF11-UART-to-Cloud-Add-on-Board-User-Guide-DS50003638.pdf)

@@ -13,18 +13,6 @@
         <itemPath>bsp/nvm_flash.h</itemPath>
         <itemPath>bsp/systick.h</itemPath>
       </logicalFolder>
-      <logicalFolder name="rnwf11" displayName="rnwf11" projectFiles="true">
-        <itemPath>rnwf11/rnwf_config.h</itemPath>
-        <itemPath>rnwf11/rnwf_ecc_service.h</itemPath>
-        <itemPath>rnwf11/rnwf_interface.h</itemPath>
-        <itemPath>rnwf11/rnwf_mqtt_service.h</itemPath>
-        <itemPath>rnwf11/rnwf_net_service.h</itemPath>
-        <itemPath>rnwf11/rnwf_system_service.h</itemPath>
-        <itemPath>rnwf11/rnwf_wifi_service.h</itemPath>
-      </logicalFolder>
-      <logicalFolder name="timer" displayName="timer" projectFiles="true">
-        <itemPath>timer/delay.h</itemPath>
-      </logicalFolder>
       <logicalFolder name="MCC Generated Files"
                      displayName="MCC Generated Files"
                      projectFiles="true">
@@ -53,6 +41,18 @@
           <itemPath>mcc_generated_files/uart/uart_interface.h</itemPath>
         </logicalFolder>
       </logicalFolder>
+      <logicalFolder name="rnwf11" displayName="rnwf11" projectFiles="true">
+        <itemPath>rnwf11/rnwf_config.h</itemPath>
+        <itemPath>rnwf11/rnwf_ecc_service.h</itemPath>
+        <itemPath>rnwf11/rnwf_interface.h</itemPath>
+        <itemPath>rnwf11/rnwf_mqtt_service.h</itemPath>
+        <itemPath>rnwf11/rnwf_net_service.h</itemPath>
+        <itemPath>rnwf11/rnwf_system_service.h</itemPath>
+        <itemPath>rnwf11/rnwf_wifi_service.h</itemPath>
+      </logicalFolder>
+      <logicalFolder name="timer" displayName="timer" projectFiles="true">
+        <itemPath>timer/delay.h</itemPath>
+      </logicalFolder>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -74,17 +74,6 @@
       <logicalFolder name="bsp" displayName="bsp" projectFiles="true">
         <itemPath>bsp/nvm_flash.c</itemPath>
         <itemPath>bsp/systick.c</itemPath>
-      </logicalFolder>
-      <logicalFolder name="rnwf11" displayName="rnwf11" projectFiles="true">
-        <itemPath>rnwf11/rnwf_ecc_service.c</itemPath>
-        <itemPath>rnwf11/rnwf_interface.c</itemPath>
-        <itemPath>rnwf11/rnwf_mqtt_service.c</itemPath>
-        <itemPath>rnwf11/rnwf_net_service.c</itemPath>
-        <itemPath>rnwf11/rnwf_system_service.c</itemPath>
-        <itemPath>rnwf11/rnwf_wifi_service.c</itemPath>
-      </logicalFolder>
-      <logicalFolder name="timer" displayName="timer" projectFiles="true">
-        <itemPath>timer/src/delay.c</itemPath>
       </logicalFolder>
       <logicalFolder name="Libraries" displayName="Libraries" projectFiles="true">
         <logicalFolder name="iotc-c-lib" displayName="iotc-c-lib" projectFiles="true">
@@ -125,6 +114,17 @@
           </logicalFolder>
         </logicalFolder>
       </logicalFolder>
+      <logicalFolder name="rnwf11" displayName="rnwf11" projectFiles="true">
+        <itemPath>rnwf11/rnwf_ecc_service.c</itemPath>
+        <itemPath>rnwf11/rnwf_interface.c</itemPath>
+        <itemPath>rnwf11/rnwf_mqtt_service.c</itemPath>
+        <itemPath>rnwf11/rnwf_net_service.c</itemPath>
+        <itemPath>rnwf11/rnwf_system_service.c</itemPath>
+        <itemPath>rnwf11/rnwf_wifi_service.c</itemPath>
+      </logicalFolder>
+      <logicalFolder name="timer" displayName="timer" projectFiles="true">
+        <itemPath>timer/src/delay.c</itemPath>
+      </logicalFolder>
       <itemPath>main.c</itemPath>
     </logicalFolder>
   </logicalFolder>
@@ -145,12 +145,14 @@
         <platform>3</platform>
       </toolsSet>
       <packs>
-        <pack name="dsPIC33AK-MP_DFP" vendor="Microchip" version="1.0.81"/>
+        <pack name="dsPIC33AK-MP_DFP" vendor="Microchip" version="1.4.260"/>
       </packs>
       <ScriptingSettings>
       </ScriptingSettings>
       <compileType>
         <linkerTool>
+          <linkerLibItems>
+          </linkerLibItems>
         </linkerTool>
         <archiverTool>
         </archiverTool>
@@ -189,7 +191,8 @@
         <property key="enable-symbols" value="true"/>
         <property key="enable-unroll-loops" value="false"/>
         <property key="expand-pragma-config" value="false"/>
-        <property key="extra-include-directories" value="Libraries/iotc-c-lib/core/include;Libraries/iotc-c-lib/lib/cJSON"/>
+        <property key="extra-include-directories"
+                  value="Libraries/iotc-c-lib/core/include;Libraries/iotc-c-lib/lib/cJSON"/>
         <property key="isolate-each-function" value="false"/>
         <property key="keep-inline" value="false"/>
         <property key="oXC16gcc-cnsts-mauxflash" value="false"/>
