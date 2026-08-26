@@ -91,7 +91,7 @@ own filesystem (not the dsPIC33's).
   - `rnwf_ecc_service.c` (the RNWF11's onboard ATECC608 secure-element path)
     is compiled in but never exercised at runtime - this project uses the
     plain `RNWF_NET_TLS_CONFIG_1` path (cert/key uploaded to the module's
-    filesystem, see `tools/provision_rnwf11_cert.py`) rather than
+    filesystem, see `tools/provision_rnwf11_cert.py`/`.ps1`) rather than
     `RNWF_NET_TLS_ECC608_CONFIG_1`.
 - **`app/`** - the actual application logic, all original code:
   - `device_config.c`/`.h` - the WiFi/IoTConnect config struct, persisted to
@@ -119,10 +119,12 @@ The RNWF11's own MQTT/TLS client handles the actual connection, but it has no
 HTTPS/discovery capability of its own - only WiFi, sockets, TLS, and MQTT AT
 commands. Doing IoTConnect's discovery+identity HTTPS round-trip on-device
 would mean building an HTTP client on top of the RNWF11's raw TCP+TLS socket
-AT commands. `tools/provision_device_config.py` does that resolution once, on
-the PC (using `iotconnect-sdk-lite`'s public `DeviceRestApi`), and bakes the
-result into the device's flash instead. If IoTConnect ever reassigns your
-device to a different broker, re-run that script.
+AT commands. `tools/provision_device_config.py` (or its PowerShell
+equivalent, `.ps1`, which calls the same discovery/identity REST endpoints
+directly since `iotconnect-sdk-lite` is Python-only) does that resolution
+once, on the PC, and bakes the result into the device's flash instead. If
+IoTConnect ever reassigns your device to a different broker, re-run that
+script.
 
 ## 3. Modifying the Firmware
 
@@ -143,7 +145,7 @@ device to a different broker, re-run that script.
 ## 4. Provisioning Protocol Reference
 
 `app/provisioning.c` implements a line-based protocol over UART1 (the debug
-console), driven by `tools/provision_device_config.py`:
+console), driven by `tools/provision_device_config.py`/`.ps1`:
 
 ```
 PROVISION
