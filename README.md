@@ -21,11 +21,10 @@ IoTConnect every 10 seconds.
 4. [Step 2: Generate and Upload the Device Certificate](#4-step-2-generate-and-upload-the-device-certificate)
 5. [Step 3: Create the Device in IoTConnect](#5-step-3-create-the-device-in-iotconnect)
 6. [Step 4: Mount the RNWF11 on the Curiosity Board](#6-step-4-mount-the-rnwf11-on-the-curiosity-board)
-7. [Step 5: Build and Flash the Firmware](#7-step-5-build-and-flash-the-firmware)
+7. [Step 5: Flash the Firmware](#7-step-5-flash-the-firmware)
 8. [Step 6: Provision WiFi and IoTConnect Config](#8-step-6-provision-wifi-and-iotconnect-config)
 9. [Running the Demo](#9-running-the-demo)
-10. [How It Works](#10-how-it-works)
-11. [Resources](#11-resources)
+10. [Resources](#10-resources)
 
 ## 1. Introduction
 
@@ -58,7 +57,7 @@ before the final config-provisioning step can talk to it.
 
 ### Software
 
-1. [MPLAB X IDE](https://www.microchip.com/mplabx) 6.25 or later, with the XC-DSC compiler 3.21 or later and the `dsPIC33AK-MP_DFP` device pack (same toolchain as the OOB demo)
+1. [MPLAB IPE](https://www.microchip.com/mplab/mplab-integrated-programming-environment) (or MPLAB X IDE, which includes it) to flash the pre-built firmware image in [`bin/`](bin/) via the onboard PKOB4 debugger. You only need the full MPLAB X IDE if you're building from source - see [developer.md](developer.md).
 2. Python 3.9+ with `openssl` on your `PATH`
 3. A serial terminal (PuTTY, Tera Term, MPLAB Data Visualizer's terminal, etc.) to watch the device's console output
 4. An [IoTConnect](https://www.iotconnect.io/) account
@@ -128,17 +127,24 @@ for that socket (UART2 on RP72/RP73, mapped via Peripheral Pin Select in
 <!-- TODO: photo of the RNWF11 mounted on mikroBUS A -->
 ![RNWF11 mounted on mikroBUS A](media/rnwf11-mounted.png)
 
-## 7. Step 5: Build and Flash the Firmware
+## 7. Step 5: Flash the Firmware
 
-1. Open [`firmware/dspic33ak512mps512_rnwf11_iotconnect.X`](firmware/dspic33ak512mps512_rnwf11_iotconnect.X) in MPLAB X.
-2. Clean and build the project.
-3. Program the board via the onboard PKOB4 debugger (Make and Program Device).
-4. Open a serial terminal on the debug console port (UART1, 115200 8-N-1) to watch the boot log.
+This quickstart ships a pre-built firmware image at
+[`bin/dspic33ak512mps512_rnwf11_iotconnect.hex`](bin/) - you don't need
+MPLAB X or to build anything to run the demo.
 
-<!-- TODO: screenshot of a successful build in MPLAB X -->
+1. Open MPLAB IPE, select the dsPIC33AK512MPS512 device and the onboard PKOB4 tool.
+2. Browse to `bin/dspic33ak512mps512_rnwf11_iotconnect.hex` and click **Program**.
+3. Open a serial terminal on the debug console port (UART1, 115200 8-N-1) to watch the boot log.
+
+<!-- TODO: screenshot of MPLAB IPE programming the board -->
 
 The firmware will print `Not provisioned yet.` and wait - that's expected
 until you complete the next step.
+
+> [!TIP]
+> Modifying the firmware, or just want to build it yourself from source?
+> See [developer.md](developer.md).
 
 ## 8. Step 6: Provision WiFi and IoTConnect Config
 
@@ -168,9 +174,9 @@ on-chip flash over its console UART.
 
 > [!NOTE]
 > The broker host/topic are resolved once, here, rather than re-resolved by
-> the firmware on every boot - see [Section 10](#10-how-it-works) for why. If
-> IoTConnect ever reassigns your device to a different broker, re-run this
-> script.
+> the firmware on every boot - see [developer.md](developer.md#2-project-architecture)
+> for why. If IoTConnect ever reassigns your device to a different broker,
+> re-run this script.
 
 ## 9. Running the Demo
 
@@ -181,44 +187,9 @@ Watch it arrive on the device's **Live Data** tab in the IoTConnect console.
 <!-- TODO: screenshot of the console debug log showing a successful connect + publish -->
 <!-- TODO: screenshot of the IoTConnect Live Data tab showing incoming "random" values -->
 
-## 10. How It Works
+## 10. Resources
 
-```
-dsPIC33AK512MPS512                RNWF11                      IoTConnect
-+----------------+   AT commands  +--------------+   MQTT/TLS  +------------+
-| main.c         |--- UART2 ----->| WiFi + MQTT  |------------>| Your       |
-| iotc-c-lib     |   (mikroBUS A) | + TLS client |             | Device     |
-| (JSON builder  |                | cert/key in  |             |            |
-|  only)         |                | its own      |             |            |
-+----------------+                | filesystem   |             +------------+
-                                   +--------------+
-```
-
-- **`firmware/dspic33ak512mps512_rnwf11_iotconnect.X/rnwf11/`** - Microchip's
-  own RNWF11 AT-command service layer, ported from their
-  [AVR128DB48/SAME54 reference firmware](https://github.com/MicrochipTech/AzureDemo_RNWF)
-  (that code turned out to be almost entirely portable C, sitting behind a
-  thin UART interface struct - only the hardware shim needed replacing).
-- **`app/iotc_rnwf11.c`** - glue between that driver and
-  [`Libraries/iotc-c-lib`](https://github.com/avnet-iotconnect/iotc-c-lib):
-  builds telemetry JSON with iotc-c-lib's `iotcl_telemetry_*` functions (used
-  standalone - iotc-c-lib doesn't bundle an MQTT/TLS client, by design), then
-  publishes it via `AT+MQTTPUB` through the RNWF11 driver.
-- **`app/device_config.c`** / **`bsp/nvm_flash.c`** - WiFi/IoTConnect config
-  is stored in the dsPIC33's own on-chip flash (word-programmed per the data
-  sheet's Flash Program Memory chapter), not on the RNWF11 - the RNWF11's
-  filesystem only supports certificate/key files (`AT+FS` `FILETYPE`
-  1=CERT/2=PRIKEY), not arbitrary config.
-- **Why resolve the broker at provisioning time, not on every boot?** The
-  RNWF11's own MQTT/TLS client handles the actual connection, but it has no
-  HTTPS/discovery capability of its own - only WiFi, sockets, TLS, and MQTT.
-  Doing IoTConnect's discovery+identity HTTPS round-trip on-device would mean
-  building an HTTP client on top of the RNWF11's raw TCP+TLS socket AT
-  commands. `tools/provision_device_config.py` does that resolution once, on
-  the PC, and bakes the result into the device's flash instead.
-
-## 11. Resources
-
+- [developer.md](developer.md) - building from source, project architecture, and how to modify the firmware
 - [dsPIC33A Curiosity OOB Demo](https://github.com/microchip-pic-avr-examples/dspic33a-curiosity-oob) - the base this project's clock/pin configuration borrows from
 - [RNWF11 UART to Cloud Add-on Board User's Guide](https://ww1.microchip.com/downloads/aemDocuments/documents/WSG/ProductDocuments/UserGuides/RNWF11-UART-to-Cloud-Add-on-Board-User-Guide-DS50003638.pdf)
 - [RNWF11 Application Developer's Guide](https://onlinedocs.microchip.com/oxy/GUID-209426F5-2F78-4B3F-80A0-AD79A119381E) (AT command reference)
