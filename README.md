@@ -1,14 +1,14 @@
-# dsPIC33AK512MPS512 + RNWF11 IoTConnect Quickstart
+# dsPIC33AK512MPS512 + RNWF11 /IOTCONNECT Quickstart
 
 A baremetal C quickstart connecting the Microchip **dsPIC33AK512MPS512** (on the
 **dsPIC33 Curiosity Platform Development Board**) to
-[Avnet IoTConnect](https://www.iotconnect.io/) using IoTConnect's
+[Avnet /IOTCONNECT](https://www.iotconnect.io/) using /IOTCONNECT's
 [C SDK](https://github.com/avnet-iotconnect/iotc-c-lib), over a Microchip
 **RNWF11 UART to Cloud Add-on Board**. No RTOS, no MQTT/TLS stack on the MCU -
 the RNWF11 owns the WiFi/MQTT/TLS connection itself, using a certificate and
 key stored on its own filesystem, and the dsPIC33 just talks to it over UART
 with AT commands. The demo sends one random-number telemetry value to
-IoTConnect every 10 seconds.
+/IOTCONNECT every 10 seconds.
 
 <!-- TODO: photo of the assembled setup (Curiosity board + RNWF11 mounted on mikroBUS A) -->
 ![Assembled hardware](media/hardware-overview.png)
@@ -19,15 +19,15 @@ IoTConnect every 10 seconds.
 2. [Download the Quickstart Files](#2-download-the-quickstart-files)
 3. [Import the Device Template](#3-import-the-device-template)
 4. [Generate and Upload the Device Certificate](#4-generate-and-upload-the-device-certificate)
-5. [Create the Device in IoTConnect](#5-create-the-device-in-iotconnect)
+5. [Create the Device in /IOTCONNECT](#5-create-the-device-in-iotconnect)
 6. [Mount the RNWF11 on the Curiosity Board](#6-mount-the-rnwf11-on-the-curiosity-board)
 7. [Flash the Firmware](#7-flash-the-firmware)
-8. [Provision WiFi and IoTConnect Config](#8-provision-wifi-and-iotconnect-config)
+8. [Provision WiFi and /IOTCONNECT Config](#8-provision-wifi-and-iotconnect-config)
 9. [Running the Demo](#9-running-the-demo)
 10. [Resources](#10-resources)
 
 The steps below are in the order you actually need to do them: the device
-certificate has to exist before you can create the device in IoTConnect, the
+certificate has to exist before you can create the device in /IOTCONNECT, the
 RNWF11 has to be provisioned with that certificate before it's mounted on
 the Curiosity board, and the firmware has to already be flashed and running
 before the final config-provisioning step can talk to it.
@@ -47,7 +47,7 @@ before the final config-provisioning step can talk to it.
 2. `openssl` on your `PATH` (already present on most Linux/macOS systems; on Windows it's included with [Git for Windows](https://git-scm.com/downloads/win), among other sources)
 3. Either Python 3.9+ **or** PowerShell 5.1+ (Windows ships this by default; PowerShell 7+ also works on Linux/macOS) to run the provisioning scripts - pick whichever you're more comfortable with, both do the same thing
 4. A serial terminal (PuTTY, Tera Term, MPLAB Data Visualizer's terminal, etc.) to watch the device's console output
-5. An [IoTConnect](https://www.iotconnect.io/) account
+5. An [/IOTCONNECT](https://www.iotconnect.io/) account
 
 ## 2. Download the Quickstart Files
 
@@ -101,7 +101,7 @@ individually or cloned the repo.
 <!-- TODO: screenshot of importing templates/dspic33-rnwf11-quickstart-template.json,
      matching the style of the UI-ONBOARD.md walkthrough in iotc-python-lite-sdk-demos -->
 
-In the IoTConnect console, go to **Device &rarr; Templates** and import
+In the /IOTCONNECT console, go to **Device &rarr; Templates** and import
 [`templates/dspic33-rnwf11-quickstart-template.json`](templates/dspic33-rnwf11-quickstart-template.json).
 You'll select this template in a couple of sections from now, when creating
 the device.
@@ -131,18 +131,18 @@ python provision_rnwf11_cert.py --port /dev/ttyACM0 --duid my-device-01 \
 ```
 
 Replace `/dev/ttyACM0`/`COM6` with the RNWF11's serial port, and `--ca-cert-path`/`-CaCertPath` with a
-root/CA certificate matching your IoTConnect account's backend (for AWS-backed
+root/CA certificate matching your /IOTCONNECT account's backend (for AWS-backed
 accounts, [Amazon Root CA 1](https://www.amazontrust.com/repository/AmazonRootCA1.pem)
 is the common choice). `--duid` is a Unique ID of your choosing for this
-device - you'll reuse it later, both when creating the device in IoTConnect
-and when provisioning WiFi/IoTConnect config.
+device - you'll reuse it later, both when creating the device in /IOTCONNECT
+and when provisioning WiFi/IOTCONNECT config.
 
 This generates a self-signed device certificate, prints it to the terminal,
 and uploads the CA cert, device cert, and device key to the RNWF11's own
 filesystem via `AT+FS`. Keep the terminal output around - you'll paste the
 printed certificate into the IoTConnect console in the next step.
 
-## 5. Create the Device in IoTConnect
+## 5. Create the Device in /IOTCONNECT
 
 <!-- TODO: screenshot of creating a device with "Use my certificate", pasting
      in the certificate printed by provision_rnwf11_cert.py -->
@@ -181,7 +181,7 @@ until you complete the next step.
 > Modifying the firmware, or just want to build it yourself from source?
 > See [developer.md](developer.md).
 
-## 8. Provision WiFi and IoTConnect Config
+## 8. Provision WiFi and /IOTCONNECT Config
 
 With the firmware running and waiting, push WiFi and IoTConnect config to it
 over the same debug console UART:
@@ -203,35 +203,35 @@ python provision_device_config.py --port /dev/ttyACM1 \
 ```
 
 Replace `/dev/ttyACM1`/`COM5` with the Curiosity board's debug console port. Your CPID and
-Environment are under **Settings &rarr; Key Value** in the IoTConnect console.
+Environment are under **Settings &rarr; Key Value** in the /IOTCONNECT console.
 `--duid`/`-Duid` must match the DUID you used earlier when generating the
 certificate and creating the device. The cert/key name options must match
 what `provision_rnwf11_cert.py`/`.ps1` printed when you ran it earlier (the
 defaults shown here match its defaults).
 
 This script resolves your device's actual MQTT broker host, username, and
-telemetry topic via IoTConnect's discovery/identity API (using
+telemetry topic via /IOTCONNECT's discovery/identity API (using
 [`iotconnect-sdk-lite`](https://pypi.org/project/iotconnect-sdk-lite/)'s
 public `DeviceRestApi`, the same mechanism the other quickstarts in this
 family use - this only succeeds once the device already exists in
-IoTConnect, which is why the device has to be created before this step),
+/IOTCONNECT, which is why the device has to be created before this step),
 then writes everything into the dsPIC33's on-chip flash over its console
 UART.
 
 > [!NOTE]
 > The broker host/topic are resolved once, here, rather than re-resolved by
 > the firmware on every boot - see [developer.md](developer.md#2-project-architecture)
-> for why. If IoTConnect ever reassigns your device to a different broker,
+> for why. If /IOTCONNECT ever reassigns your device to a different broker,
 > re-run this script.
 
 ## 9. Running the Demo
 
-Once provisioning completes, the device connects to WiFi, then to IoTConnect
+Once provisioning completes, the device connects to WiFi, then to /IOTCONNECT
 over MQTT via the RNWF11, and publishes `{"random": <0-100>}` every 10 seconds.
-Watch it arrive on the device's **Live Data** tab in the IoTConnect console.
+Watch it arrive on the device's **Live Data** tab in the /IOTCONNECT console.
 
 <!-- TODO: screenshot of the console debug log showing a successful connect + publish -->
-<!-- TODO: screenshot of the IoTConnect Live Data tab showing incoming "random" values -->
+<!-- TODO: screenshot of the /IOTCONNECT Live Data tab showing incoming "random" values -->
 
 ## 10. Resources
 
@@ -239,7 +239,7 @@ Watch it arrive on the device's **Live Data** tab in the IoTConnect console.
 - [dsPIC33A Curiosity OOB Demo](https://github.com/microchip-pic-avr-examples/dspic33a-curiosity-oob) - the base this project's clock/pin configuration borrows from
 - [RNWF11 UART to Cloud Add-on Board User's Guide](https://ww1.microchip.com/downloads/aemDocuments/documents/WSG/ProductDocuments/UserGuides/RNWF11-UART-to-Cloud-Add-on-Board-User-Guide-DS50003638.pdf)
 - [RNWF11 Application Developer's Guide](https://onlinedocs.microchip.com/oxy/GUID-209426F5-2F78-4B3F-80A0-AD79A119381E) (AT command reference)
-- [iotc-c-lib](https://github.com/avnet-iotconnect/iotc-c-lib) - IoTConnect's C SDK
+- [iotc-c-lib](https://github.com/avnet-iotconnect/iotc-c-lib) - /IOTCONNECT's C SDK
 - [iotc-python-lite-sdk-demos](https://github.com/avnet-iotconnect/iotc-python-lite-sdk-demos) - the same minimal-quickstart pattern for other boards
 - [iotc-mchp-sama7d65-rnwf11](https://github.com/avnet-iotconnect/iotc-mchp-sama7d65-rnwf11) - an earlier, unconventional use of the RNWF11 (host-side TLS instead of on-module)
 
