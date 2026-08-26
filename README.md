@@ -119,39 +119,42 @@ Move the jumper to **PC3V3** and plug the RNWF11's USB-C port directly into
 your PC.
 
 **Before running the command below**, find the serial port name it just
-enumerated as:
+enumerated as - **the full path/name, not just the last part** (e.g.
+`/dev/ttyACM0`, not `ttyACM0`):
 - **Linux**: run `ls /dev/serial/by-id/` (or `dmesg | tail` right after
   plugging it in) - look for the RNWF11's MCP2200 USB-to-UART bridge, e.g.
   `/dev/ttyACM0`.
 - **macOS**: run `ls /dev/cu.*` - look for something like `/dev/cu.usbmodemXXXX`.
 - **Windows**: open Device Manager &rarr; **Ports (COM & LPT)** - look for
-  "MCP2200 USB Serial Port Emulator" and note its `COMx` number.
+  "MCP2200 USB Serial Port Emulator" and note its `COMx` number (e.g. `COM6`).
 
-You'll also need a root/CA certificate matching your IoTConnect account's
-backend (for AWS-backed accounts,
-[Amazon Root CA 1](https://www.amazontrust.com/repository/AmazonRootCA1.pem)
-is the common choice) - download it and note its path.
+The command below downloads [Amazon Root CA 1](https://www.amazontrust.com/repository/AmazonRootCA1.pem)
+for you, which is the right CA cert if your IoTConnect account is AWS-backed
+(the common case). If your account is Azure-backed instead, download your
+own CA cert first and replace `AmazonRootCA1.pem`/`-CaCertPath` with its path.
 
 Then, in the command below, replace `MYDEVICENAME` with the port you just
-found, and `amazon-root-ca-1.pem` with your CA cert's path. `--duid` is a
-Unique ID of your own choosing for this device - you'll reuse it later, both
-when creating the device in IoTConnect and when provisioning WiFi/IoTConnect
-config, so pick something memorable (`my-device-01` here is just an example).
-From the `dspic33-rnwf11-quickstart` directory you downloaded the files into:
+found. `--duid` is a Unique ID of your own choosing for this device - you'll
+reuse it later, both when creating the device in IoTConnect and when
+provisioning WiFi/IoTConnect config, so pick something memorable
+(`my-device-01` here is just an example). From the `dspic33-rnwf11-quickstart`
+directory you downloaded the files into:
 
 **Linux/macOS:**
 ```bash
 cd tools
+curl -fsSLO https://www.amazontrust.com/repository/AmazonRootCA1.pem
 python3 provision_rnwf11_cert.py --port MYDEVICENAME --duid my-device-01 \
-    --ca-cert-path amazon-root-ca-1.pem
+    --ca-cert-path AmazonRootCA1.pem
 cd ..
 ```
 
 **Windows (PowerShell):**
 ```powershell
 Set-Location tools
+Invoke-WebRequest https://www.amazontrust.com/repository/AmazonRootCA1.pem -OutFile AmazonRootCA1.pem
 .\provision_rnwf11_cert.ps1 -Port MYDEVICENAME -Duid my-device-01 `
-    -CaCertPath amazon-root-ca-1.pem
+    -CaCertPath AmazonRootCA1.pem
 Set-Location ..
 ```
 
