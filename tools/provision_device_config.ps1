@@ -80,6 +80,7 @@ try {
 }
 
 Write-Host "Resolved broker host: $($identity.h)"
+Write-Host "Resolved MQTT client ID: $($identity.id)"
 Write-Host "Resolved MQTT username: $(if ($identity.un) { $identity.un } else { '(none)' })"
 Write-Host "Resolved telemetry topic: $($identity.topics.rpt)"
 
@@ -88,7 +89,13 @@ $fields = [ordered]@{
     WIFI_PASSWORD    = $WifiPassword
     IOTC_CPID        = $Cpid
     IOTC_ENV         = $Env
-    IOTC_DUID        = $Duid
+    # The firmware only ever uses this field as the MQTT client ID, so use
+    # IoTConnect's own resolved client ID here rather than the raw -Duid:
+    # they're the same for "dedicated" instances, but for "shared" instances
+    # (e.g. POC/trial accounts) IoTConnect assigns a different client ID
+    # (often "CPID-DUID"), and sending the wrong one gets the connection
+    # silently rejected by the broker.
+    IOTC_DUID        = $identity.id
     MQTT_BROKER_HOST = $identity.h
     MQTT_BROKER_PORT = $MqttPort
     MQTT_USERNAME    = $(if ($identity.un) { $identity.un } else { "" })
@@ -112,25 +119,49 @@ try {
 try {
     Start-Sleep -Milliseconds 200  # let the port settle before writing
 
-    $serialPort.Write("PROVISION`n")
-    foreach ($key in $fields.Keys) {
-        $serialPort.Write("$key=$($fields[$key])`n")
-    }
-    $serialPort.Write("END`n")
+    # The firmware's WiFi/MQTT connect attempts each block for many seconds
+    # at a time (and this is a polled, non-interrupt-driven UART, so bytes
+    # sent while it's not actively reading are lost, not just delayed) - a
+    # single one-shot send has a real chance of landing in one of those
+    # windows and getting no response at all, even though the device is
+    # working fine. Resend the whole handshake periodically until either it
+    # succeeds or we've comfortably outlasted a full connect-retry cycle.
+    $overallTimeoutSec = 90
+    $retryIntervalSec = 5
+    $deadline = (Get-Date).AddSeconds($overallTimeoutSec)
+    $attempt = 0
+    $provisioned = $false
 
-    $response = $null
-    try {
-        $response = $serialPort.ReadLine().Trim()
-    } catch [System.TimeoutException] {
-        Write-Host "FAILED: device reported an error: (no response - check the port/baud rate)"
-        exit 1
-    }
+    while (-not $provisioned) {
+        $attempt++
+        $serialPort.DiscardInBuffer()  # discard anything stale from a previous attempt
 
-    if ($response -eq "OK") {
-        Write-Host "Device confirmed: OK"
-    } else {
-        Write-Host "FAILED: device reported an error: $response"
-        exit 1
+        $serialPort.Write("PROVISION`n")
+        foreach ($key in $fields.Keys) {
+            $serialPort.Write("$key=$($fields[$key])`n")
+        }
+        $serialPort.Write("END`n")
+
+        $response = $null
+        try {
+            $response = $serialPort.ReadLine().Trim()
+        } catch [System.TimeoutException] {
+            $response = $null
+        }
+
+        if ($response -eq "OK") {
+            Write-Host "Device confirmed: OK"
+            $provisioned = $true
+        } elseif ($response) {
+            Write-Host "FAILED: device reported an error: $response"
+            exit 1
+        } elseif ((Get-Date) -ge $deadline) {
+            Write-Host "FAILED: device never responded - check the port/baud rate, and that the firmware is running"
+            exit 1
+        } else {
+            Write-Host "No response yet (attempt $attempt) - the board may be mid-connection-attempt and not listening right now; retrying..."
+            Start-Sleep -Seconds $retryIntervalSec
+        }
     }
 } finally {
     $serialPort.Close()

@@ -26,7 +26,7 @@ FILETYPE_CERT = 1
 FILETYPE_PRIKEY = 2
 XMODEM_CRC16 = 2
 
-EC_CURVE = "prime256v1"
+RSA_KEY_BITS = 2048
 CERT_DAYS = 36500  # 100 years, matches the other iotc quickstarts' self-signed certs
 
 
@@ -35,7 +35,14 @@ def gencert(duid: str, out_dir: Path):
     cert_path = out_dir / f"{duid}-cert.pem"
     subj = f"/C=US/ST=IL/L=Chicago/O=IoTConnect/CN={duid}"
 
-    subprocess.run(["openssl", "ecparam", "-name", EC_CURVE, "-genkey", "-noout", "-out", str(key_path)], check=True)
+    # RSA, not EC: the RNWF11's plain file-based TLS config path
+    # (RNWF_NET_TLS_CONFIG_1) rejects the MQTT connect instantly with an EC
+    # (prime256v1) key even though the identical cert/key pair connects fine
+    # from a normal TLS client - EC client keys appear to only be supported
+    # via the module's separate ATECC608-secure-element code path
+    # (RNWF_NET_TLS_ECC608_CONFIG_1), not as a plain uploaded file. RSA is
+    # universally supported here.
+    subprocess.run(["openssl", "genrsa", "-out", str(key_path), str(RSA_KEY_BITS)], check=True)
     subprocess.run(
         ["openssl", "req", "-new", "-days", str(CERT_DAYS), "-nodes", "-x509",
          "-subj", subj, "-key", str(key_path), "-out", str(cert_path)],
@@ -71,7 +78,27 @@ class RnwfAtLink:
             raise RuntimeError(f"AT command failed: {cmd!r} -> {text!r}")
         return text
 
+    def delete_file(self, filetype: int, filename: str):
+        # Best-effort: the RNWF11's filesystem persists across power cycles
+        # and AT+FS's LOAD op refuses to overwrite an existing file
+        # ("ERROR:7.1,File Exists"), which bites when re-running this script
+        # (e.g. provisioning a new device onto a previously-used RNWF11).
+        # If the file isn't there yet, the module just replies ERROR, which
+        # is fine - we only care that it's gone before we upload.
+        self.ser.timeout = 5
+        self.ser.write(f'AT+FS=3,{filetype},"{filename}"\r\n'.encode("ascii"))
+        deadline = time.time() + 5
+        response = b""
+        while time.time() < deadline:
+            chunk = self.ser.read(256)
+            if not chunk:
+                continue
+            response += chunk
+            if b"OK\r\n" in response or b"ERROR" in response:
+                break
+
     def upload_file(self, filetype: int, filename: str, data: bytes):
+        self.delete_file(filetype, filename)
         print(f"Uploading {filename} ({len(data)} bytes)...")
         self.ser.timeout = 5
         self.ser.write(f'AT+FS=1,{filetype},{XMODEM_CRC16},"{filename}",{len(data)}\r\n'.encode("ascii"))

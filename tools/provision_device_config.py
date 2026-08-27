@@ -33,21 +33,43 @@ def resolve_connection_info(cpid: str, env: str, duid: str, platform: str):
     return identity
 
 
-def send_provisioning_protocol(ser: serial.Serial, fields: dict):
+def send_provisioning_protocol(ser: serial.Serial, fields: dict, overall_timeout=90, retry_interval=5):
+    # The firmware's WiFi/MQTT connect attempts each block for many seconds
+    # at a time (and this is a polled, non-interrupt-driven UART, so bytes
+    # sent while it's not actively reading are lost, not just delayed) - a
+    # single one-shot send has a real chance of landing in one of those
+    # windows and getting no response at all, even though the device is
+    # working fine. Resend the whole handshake periodically until either it
+    # succeeds or we've comfortably outlasted a full connect-retry cycle.
     def send_line(line: str):
         ser.write((line + "\n").encode("ascii"))
 
-    send_line("PROVISION")
-    for key, value in fields.items():
-        send_line(f"{key}={value}")
-    send_line("END")
+    deadline = time.time() + overall_timeout
+    attempt = 0
+    while True:
+        attempt += 1
+        ser.reset_input_buffer()  # discard anything stale from a previous attempt
 
-    response = ser.readline().decode("ascii", errors="replace").strip()
-    if response == "OK":
-        print("Device confirmed: OK")
-        return True
-    print(f"FAILED: device reported an error: {response or '(no response - check the port/baud rate)'}")
-    return False
+        send_line("PROVISION")
+        for key, value in fields.items():
+            send_line(f"{key}={value}")
+        send_line("END")
+
+        response = ser.readline().decode("ascii", errors="replace").strip()
+        if response == "OK":
+            print("Device confirmed: OK")
+            return True
+        if response:
+            print(f"FAILED: device reported an error: {response}")
+            return False
+
+        if time.time() >= deadline:
+            print("FAILED: device never responded - check the port/baud rate, and that the firmware is running")
+            return False
+
+        print(f"No response yet (attempt {attempt}) - the board may be mid-connection-attempt "
+              f"and not listening right now; retrying...")
+        time.sleep(retry_interval)
 
 
 def main():
@@ -72,6 +94,7 @@ def main():
         sys.exit(1)
 
     print(f"Resolved broker host: {identity.host}")
+    print(f"Resolved MQTT client ID: {identity.client_id}")
     print(f"Resolved MQTT username: {identity.username or '(none)'}")
     print(f"Resolved telemetry topic: {identity.topics.rpt}")
 
@@ -80,7 +103,13 @@ def main():
         "WIFI_PASSWORD": args.wifi_password,
         "IOTC_CPID": args.cpid,
         "IOTC_ENV": args.env,
-        "IOTC_DUID": args.duid,
+        # The firmware only ever uses this field as the MQTT client ID, so
+        # use IoTConnect's own resolved client_id here rather than the raw
+        # --duid: they're the same for "dedicated" instances, but for
+        # "shared" instances (e.g. POC/trial accounts) IoTConnect assigns a
+        # different client ID (often "CPID-DUID"), and sending the wrong
+        # one gets the connection silently rejected by the broker.
+        "IOTC_DUID": identity.client_id,
         "MQTT_BROKER_HOST": identity.host,
         "MQTT_BROKER_PORT": MQTT_PORT,
         "MQTT_USERNAME": identity.username or "",

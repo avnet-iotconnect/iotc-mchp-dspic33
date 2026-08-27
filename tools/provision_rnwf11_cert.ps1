@@ -27,7 +27,7 @@ $ErrorActionPreference = "Stop"
 $FILETYPE_CERT = 1
 $FILETYPE_PRIKEY = 2
 $XMODEM_CRC16 = 2
-$EC_CURVE = "prime256v1"
+$RSA_KEY_BITS = 2048
 $CERT_DAYS = 36500  # 100 years, matches the other iotc quickstarts' self-signed certs
 
 function New-DeviceCert {
@@ -38,8 +38,15 @@ function New-DeviceCert {
     $certPath = Join-Path $OutDir "$Duid-cert.pem"
     $subj = "/C=US/ST=IL/L=Chicago/O=IoTConnect/CN=$Duid"
 
-    & openssl ecparam -name $EC_CURVE -genkey -noout -out $keyPath
-    if ($LASTEXITCODE -ne 0) { throw "openssl ecparam failed" }
+    # RSA, not EC: the RNWF11's plain file-based TLS config path
+    # (RNWF_NET_TLS_CONFIG_1) rejects the MQTT connect instantly with an EC
+    # (prime256v1) key even though the identical cert/key pair connects fine
+    # from a normal TLS client - EC client keys appear to only be supported
+    # via the module's separate ATECC608-secure-element code path
+    # (RNWF_NET_TLS_ECC608_CONFIG_1), not as a plain uploaded file. RSA is
+    # universally supported here.
+    & openssl genrsa -out $keyPath $RSA_KEY_BITS
+    if ($LASTEXITCODE -ne 0) { throw "openssl genrsa failed" }
     & openssl req -new -days $CERT_DAYS -nodes -x509 -subj $subj -key $keyPath -out $certPath
     if ($LASTEXITCODE -ne 0) { throw "openssl req failed" }
 
@@ -150,6 +157,27 @@ function Send-AtCommand {
     return $response
 }
 
+function Remove-RnwfFile {
+    # Best-effort: the RNWF11's filesystem persists across power cycles and
+    # AT+FS's LOAD op refuses to overwrite an existing file
+    # ("ERROR:7.1,File Exists"), which bites when re-running this script
+    # (e.g. provisioning a new device onto a previously-used RNWF11). If the
+    # file isn't there yet, the module just replies ERROR, which is fine -
+    # we only care that it's gone before we upload.
+    param([System.IO.Ports.SerialPort]$SerialPort, [int]$FileType, [string]$FileName)
+
+    $SerialPort.ReadTimeout = 5000
+    $SerialPort.Write("AT+FS=3,$FileType,`"$FileName`"`r`n")
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $response = ""
+    while ($sw.ElapsedMilliseconds -lt 5000) {
+        $b = Read-ByteWithTimeout -SerialPort $SerialPort
+        if ($b -eq -1) { continue }
+        $response += [char]$b
+        if ($response -match "OK\r\n" -or $response -match "ERROR") { break }
+    }
+}
+
 function Send-FileToRnwf {
     param(
         [System.IO.Ports.SerialPort]$SerialPort,
@@ -158,6 +186,7 @@ function Send-FileToRnwf {
         [byte[]]$Data
     )
 
+    Remove-RnwfFile -SerialPort $SerialPort -FileType $FileType -FileName $FileName
     Write-Host "Uploading $FileName ($($Data.Length) bytes)..."
     $SerialPort.ReadTimeout = 5000
     $SerialPort.Write("AT+FS=1,$FileType,$XMODEM_CRC16,`"$FileName`",$($Data.Length)`r`n")

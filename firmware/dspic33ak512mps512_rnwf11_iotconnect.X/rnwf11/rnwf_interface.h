@@ -99,7 +99,7 @@ extern uint32_t   g_interface_timeout;
 // TODO Insert declarations
 #define RNWF_INTERFACE_TIMEOUT      0x7FFFF
 
-//#define RNWF_INTERFACE_DEBUG        1
+#define RNWF_INTERFACE_DEBUG        1 // TEMPORARY: enabled for troubleshooting - prints every AT command sent and the RNWF11's raw response over the console UART
 
 #define RNWF_IS_INTERFACE_BUSY()      if(g_interface_state == RNWF_INTERFACE_BUSY){printf("IF Busy\n");return RNWF_INTERFACE_BUSY;}
 #define RNWF_SET_INTERFACE_BUSY()     (g_interface_state = RNWF_INTERFACE_BUSY)             

@@ -357,13 +357,27 @@ RNWF_RESULT_t RNWF_IF_ASYNC_Handler(uint8_t *p_msg)
                     continue;
             
             if(strstr((char *)p_msg, RNWF_EVENT_MQTT_CONNECTED))
-            {                
+            {
                     sscanf((char *)p_arg, "%lu %*s", &status);
                 if(status)
                         result = mqtt_cb_func(RNWF_MQTT_CONNECTED, p_arg);
                 else
-                        result = mqtt_cb_func(RNWF_MQTT_DISCONNECTED, p_arg);                
-            }                   
+                        result = mqtt_cb_func(RNWF_MQTT_DISCONNECTED, p_arg);
+            }
+            // A successful connect is signaled as "+MQTTCONNACK:<session_present>,<return_code>"
+            // rather than "+MQTTCONN:1" - this module only ever emits "+MQTTCONN:0" for a
+            // rejected/dropped connection, never for a successful one, so without this the
+            // RNWF_EVENT_MQTT_CONNECTED case above never fires and a successful connect just
+            // times out on the app side despite the broker having accepted it.
+            if(strstr((char *)p_msg, RNWF_EVENT_MQTT_CONN_ACKED))
+            {
+                    uint32_t session_present, ret_code;
+                    sscanf((char *)p_arg, "%lu %lu", &session_present, &ret_code);
+                if(ret_code == 0)
+                        result = mqtt_cb_func(RNWF_MQTT_CONNECTED, p_arg);
+                else
+                        result = mqtt_cb_func(RNWF_MQTT_DISCONNECTED, p_arg);
+            }
                 if(strstr((char *)p_msg, RNWF_EVENT_MQTT_SUB_RESP))
                 {
                     result = mqtt_cb_func(RNWF_MQTT_SUBCRIBE_ACK, p_arg);

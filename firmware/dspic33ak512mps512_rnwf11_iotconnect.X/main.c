@@ -15,7 +15,6 @@
 #include <stdlib.h>
 #include "mcc_generated_files/system/system.h"
 #include "bsp/systick.h"
-#include "timer/delay.h"
 #include "app/device_config.h"
 #include "app/provisioning.h"
 #include "app/iotc_rnwf11.h"
@@ -23,13 +22,23 @@
 
 #define TELEMETRY_PERIOD_MS 10000UL
 #define RECONNECT_DELAY_MS  5000U
+#define WAITING_REPRINT_MS  5000UL
 
-static void WaitForProvisioning(device_config_t *cfg)
+static void PrintWaitingBanner(void)
 {
     printf("\r\nNot provisioned yet.\r\n");
     printf("On your PC: run tools/provision_rnwf11_cert.py once (RNWF11 connected\r\n");
     printf("directly to USB), then tools/provision_device_config.py against this\r\n");
     printf("board's console port. Waiting...\r\n");
+}
+
+static void WaitForProvisioning(device_config_t *cfg)
+{
+    // Re-print periodically rather than just once at boot - a terminal
+    // connected even a few seconds late would otherwise see nothing at all
+    // and have no way to tell the board is alive and waiting versus hung.
+    PrintWaitingBanner();
+    uint32_t last_print_ms = SYSTICK_GetMillis();
 
     for (;;)
     {
@@ -40,8 +49,38 @@ static void WaitForProvisioning(device_config_t *cfg)
                 return;
             }
             printf("Provisioning failed - waiting for retry...\r\n");
+            last_print_ms = SYSTICK_GetMillis();
+        }
+
+        if ((uint32_t)(SYSTICK_GetMillis() - last_print_ms) >= WAITING_REPRINT_MS)
+        {
+            PrintWaitingBanner();
+            last_print_ms = SYSTICK_GetMillis();
         }
     }
+}
+
+// Waits up to delay_ms, but keeps servicing new provisioning requests the
+// whole time instead of blocking blindly - without this, a device stuck
+// retrying a bad WiFi/MQTT connection would never hear a re-provisioning
+// attempt meant to fix it. Mirrors the safe pattern below (a separate
+// new_cfg_out, only meaningful when this returns true) so a failed
+// re-provisioning attempt never clobbers the caller's current config.
+static bool DelayCheckingForProvisioning(uint32_t delay_ms, device_config_t *new_cfg_out)
+{
+    uint32_t start = SYSTICK_GetMillis();
+    while ((uint32_t)(SYSTICK_GetMillis() - start) < delay_ms)
+    {
+        if (PROVISIONING_CheckForRequest())
+        {
+            if (PROVISIONING_RunOnce(new_cfg_out))
+            {
+                return true;
+            }
+            printf("Provisioning failed - waiting for retry...\r\n");
+        }
+    }
+    return false;
 }
 
 int main(void)
@@ -67,7 +106,11 @@ int main(void)
         if (!IOTC_RNWF11_ConnectWifi(&cfg))
         {
             printf("WiFi connect failed, retrying in %ums\r\n", RECONNECT_DELAY_MS);
-            DELAY_milliseconds(RECONNECT_DELAY_MS);
+            device_config_t new_cfg;
+            if (DelayCheckingForProvisioning(RECONNECT_DELAY_MS, &new_cfg))
+            {
+                cfg = new_cfg;
+            }
             continue;
         }
 
@@ -75,7 +118,11 @@ int main(void)
         if (!IOTC_RNWF11_ConnectMqtt(&cfg))
         {
             printf("MQTT connect failed, retrying in %ums\r\n", RECONNECT_DELAY_MS);
-            DELAY_milliseconds(RECONNECT_DELAY_MS);
+            device_config_t new_cfg;
+            if (DelayCheckingForProvisioning(RECONNECT_DELAY_MS, &new_cfg))
+            {
+                cfg = new_cfg;
+            }
             continue;
         }
 

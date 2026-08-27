@@ -10,8 +10,12 @@ key stored on its own filesystem, and the dsPIC33 just talks to it over UART
 with AT commands. The demo sends one random-number telemetry value to
 /IOTCONNECT every 10 seconds.
 
-<!-- TODO: photo of the assembled setup (Curiosity board + RNWF11 mounted on mikroBUS A) -->
-![Assembled hardware](media/hardware-overview.png)
+<table>
+  <tr>
+    <td><img src="media/curiosity-board-product.png" width="250"></td>
+    <td><img src="media/dim-product.png" width="250"></td>
+  </tr>
+</table>
 
 ## Table of Contents
 
@@ -98,13 +102,22 @@ individually or cloned the repo.
 
 ## 3. Import the Device Template
 
-<!-- TODO: screenshot of importing templates/dspic33-rnwf11-quickstart-template.json,
-     matching the style of the UI-ONBOARD.md walkthrough in iotc-python-lite-sdk-demos -->
+1. Log in at [console.iotconnect.io](https://console.iotconnect.io).
+2. Open the **Device** module:
 
-In the /IOTCONNECT console, go to **Device &rarr; Templates** and import
-[`templates/dspic33-rnwf11-quickstart-template.json`](templates/dspic33-rnwf11-quickstart-template.json).
-You'll select this template in a couple of sections from now, when creating
-the device.
+   <img src="media/device-page.png" width="300"/>
+
+3. At the bottom of the page, click **Templates**:
+
+   <img src="media/templates-button.png" width="300"/>
+
+4. Click **Create Template**:
+
+   <img src="media/create-template-button.png" width="300"/>
+
+5. Click **Import**, and select the **`dspic33-rnwf11-quickstart-template.json`** file you downloaded in Step 2:
+
+   <img src="media/import-button.png" width="300"/>
 
 ## 4. Generate and Upload the Device Certificate
 
@@ -134,17 +147,17 @@ for you, which is the right CA cert if your IoTConnect account is AWS-backed
 own CA cert first and replace `AmazonRootCA1.pem`/`-CaCertPath` with its path.
 
 Then, in the command below, replace `MYDEVICENAME` with the port you just
-found. `--duid` is a Unique ID of your own choosing for this device - you'll
-reuse it later, both when creating the device in IoTConnect and when
-provisioning WiFi/IoTConnect config, so pick something memorable
-(`my-device-01` here is just an example). From the `dspic33-rnwf11-quickstart`
-directory you downloaded the files into:
+found, and `MYUNIQUEID` with a Unique ID of your own choosing for this
+device - pick something memorable, e.g. `my-desk-dspic33`. You'll reuse
+whatever you pick later, both when creating the device in IoTConnect and
+when provisioning WiFi/IoTConnect config, so make a note of it. From the
+`dspic33-rnwf11-quickstart` directory you downloaded the files into:
 
 **Linux/macOS:**
 ```bash
 cd tools
 curl -fsSLO https://www.amazontrust.com/repository/AmazonRootCA1.pem
-python3 provision_rnwf11_cert.py --port MYDEVICENAME --duid my-device-01 \
+python3 provision_rnwf11_cert.py --port MYDEVICENAME --duid MYUNIQUEID \
     --ca-cert-path AmazonRootCA1.pem
 cd ..
 ```
@@ -153,7 +166,7 @@ cd ..
 ```powershell
 Set-Location tools
 Invoke-WebRequest https://www.amazontrust.com/repository/AmazonRootCA1.pem -OutFile AmazonRootCA1.pem
-.\provision_rnwf11_cert.ps1 -Port MYDEVICENAME -Duid my-device-01 `
+.\provision_rnwf11_cert.ps1 -Port MYDEVICENAME -Duid MYUNIQUEID `
     -CaCertPath AmazonRootCA1.pem
 Set-Location ..
 ```
@@ -163,6 +176,10 @@ and uploads the CA cert, device cert, and device key to the RNWF11's own
 filesystem via `AT+FS`. Keep the terminal output around - you'll paste the
 printed certificate into the IoTConnect console in the next step.
 
+> [!NOTE]
+> This takes 30-60 seconds to finish (three separate file uploads over a
+> serial connection) - it hasn't hung if it sits there for a bit.
+
 ## 5. Create the Device in /IOTCONNECT
 
 <!-- TODO: screenshot of creating a device with "Use my certificate", pasting
@@ -170,8 +187,14 @@ printed certificate into the IoTConnect console in the next step.
 
 Go to **Device &rarr; Devices** and create a new device using the template
 you imported earlier, with **"Use my certificate"** as the authentication
-type, the same Unique ID (DUID) you passed to `provision_rnwf11_cert.py`
-earlier, and the certificate that script printed.
+type and the certificate that script printed. The form asks for two
+different names - don't mix them up:
+- **Device ID**: must be the **exact same** `MYUNIQUEID` value you passed to
+  `provision_rnwf11_cert.py`/`.ps1` earlier - this is the Unique ID (DUID)
+  and it's what ties everything together.
+- **Device Name**: a separate, freeform display name shown in the
+  IoTConnect console - it can be anything you want (spaces included, e.g.
+  "My Desk dsPIC33") and doesn't need to match anything else in this guide.
 
 ## 6. Mount the RNWF11 on the Curiosity Board
 
@@ -190,10 +213,33 @@ This quickstart ships a pre-built firmware image at
 MPLAB X or to build anything to run the demo.
 
 1. Open MPLAB IPE, select the dsPIC33AK512MPS512 device and the onboard PKOB4 tool.
-2. Browse to `bin/dspic33ak512mps512_rnwf11_iotconnect.hex` and click **Program**.
-3. Open a serial terminal on the debug console port (UART1, 115200 8-N-1) to watch the boot log.
+2. Browse to `bin/dspic33ak512mps512_rnwf11_iotconnect.hex` - do this
+   **before** connecting (see the note below).
+3. Click **Connect**, then click **Program** (only enabled once connected).
+4. If IPE's output ends with `Hold In Reset mode is enabled`, the chip is
+   being deliberately held in reset and won't start running the firmware
+   yet - go to IPE's **Settings** menu and select **Release from Reset**
+   (a radio option next to **Hold in Reset**; or just unplug and replug the
+   board's power) before continuing.
+5. Open a serial terminal at 115200 8-N-1 to watch the boot log.
 
 <!-- TODO: screenshot of MPLAB IPE programming the board -->
+
+> [!TIP]
+> **Program** only becomes clickable if you selected the `.hex` file
+> *before* clicking **Connect**. If you connected first and it's staying
+> grayed out, click **Disconnect** then **Connect** again (no need to
+> re-browse for the file) and it should become clickable.
+
+> [!IMPORTANT]
+> The Curiosity board's single USB-C cable enumerates **two separate serial
+> ports**: one for the PKOB4 programmer/debugger (what MPLAB IPE just used -
+> not a text console), and a completely separate one from an onboard
+> MCP2221A USB-UART chip, which is the port this firmware's console
+> actually goes out on. On Linux/macOS, run `ls /dev/serial/by-id/` and look
+> for the entry with "MCP2221" in its name; on Windows, check Device
+> Manager for a second `COMx` port distinct from the PKOB4 one. If you open
+> the wrong port, you'll see nothing at all.
 
 The firmware will print `Not provisioned yet.` and wait - that's expected
 until you complete the next step.
@@ -208,28 +254,33 @@ With the firmware running and waiting, push WiFi and IoTConnect config to it
 over the same debug console UART.
 
 **Before running the command below**, find the Curiosity board's debug
-console port (its onboard PKOB4/MCP2221A USB-to-UART bridge - a different
-port than the RNWF11's, from the earlier step):
+console port - its onboard **MCP2221A** USB-to-UART chip, not the PKOB4
+programmer/debugger port you used in the previous step, and not the
+RNWF11's port from earlier still (the single USB-C cable to the Curiosity
+board enumerates the PKOB4 and MCP2221A ports separately):
 - **Linux**: run `ls /dev/serial/by-id/` (or `dmesg | tail` right after
-  plugging the board in) - look for something like `/dev/ttyACM1`.
+  plugging the board in) - look for the entry with "MCP2221" in its name,
+  e.g. `/dev/ttyACM1`.
 - **macOS**: run `ls /dev/cu.*` - look for something like `/dev/cu.usbmodemXXXX`.
-- **Windows**: open Device Manager &rarr; **Ports (COM & LPT)** and note its
-  `COMx` number.
+- **Windows**: open Device Manager &rarr; **Ports (COM & LPT)** - look for
+  "MCP2221 USB-UART Combo" (or similar) and note its `COMx` number.
 
-Then, in the command below, replace `MYDEVICENAME` with that port. Your CPID
-and Environment are under **Settings &rarr; Key Value** in the IoTConnect
-console. `--duid`/`-Duid` must match the DUID you used earlier when
-generating the certificate and creating the device. The cert/key name
-options must match what `provision_rnwf11_cert.py`/`.ps1` printed when you
-ran it earlier (the defaults shown here match its defaults). From the
-`dspic33-rnwf11-quickstart` directory you downloaded the files into:
+Then, in the command below, replace: `MYDEVICENAME` with that port;
+`MYWIFINETWORK`/`MYWIFIPASSWORD` with your WiFi credentials (kept in quotes
+since either may contain spaces); `MYCPID` and `MYENVIRONMENT` with the
+values under **Settings &rarr; Key Vault** in the IoTConnect console; and
+`MYUNIQUEID` with the **same** Unique ID you used earlier when generating
+the certificate and creating the device (not a new one). The cert/key name
+options don't need to change unless you changed them from the defaults
+earlier. From the `dspic33-rnwf11-quickstart` directory you downloaded the
+files into:
 
 **Linux/macOS:**
 ```bash
 cd tools
 python3 provision_device_config.py --port MYDEVICENAME \
-    --wifi-ssid "MyNetwork" --wifi-password "MyPassword" \
-    --cpid <your CPID> --env <your Environment> --duid my-device-01 \
+    --wifi-ssid "MYWIFINETWORK" --wifi-password "MYWIFIPASSWORD" \
+    --cpid MYCPID --env MYENVIRONMENT --duid MYUNIQUEID \
     --ca-name root-ca --cert-name device-cert --key-name device-key
 cd ..
 ```
@@ -238,8 +289,8 @@ cd ..
 ```powershell
 Set-Location tools
 .\provision_device_config.ps1 -Port MYDEVICENAME `
-    -WifiSsid "MyNetwork" -WifiPassword "MyPassword" `
-    -Cpid <your CPID> -Env <your Environment> -Duid my-device-01 `
+    -WifiSsid "MYWIFINETWORK" -WifiPassword "MYWIFIPASSWORD" `
+    -Cpid MYCPID -Env MYENVIRONMENT -Duid MYUNIQUEID `
     -CaName root-ca -CertName device-cert -KeyName device-key
 Set-Location ..
 ```
@@ -252,6 +303,14 @@ family use - this only succeeds once the device already exists in
 /IOTCONNECT, which is why the device has to be created before this step),
 then writes everything into the dsPIC33's on-chip flash over its console
 UART.
+
+> [!NOTE]
+> If the device is already provisioned and busy retrying a WiFi/MQTT
+> connection, it can only notice a new provisioning attempt in the brief
+> gaps between connection attempts - this script automatically retries the
+> handshake every few seconds (up to 90 seconds total) to land in one of
+> those gaps, printing `No response yet...` while it does. That's normal,
+> not a failure.
 
 > [!NOTE]
 > The broker host/topic are resolved once, here, rather than re-resolved by
