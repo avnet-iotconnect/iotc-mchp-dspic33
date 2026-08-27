@@ -112,7 +112,7 @@ individually or cloned the repo.
 
 3. At the bottom of the page, click **Templates**:
 
-   <img src="media/templates-button.png" width="300"/>
+   <img src="media/templates-button.png" width="500"/>
 
 4. Click **Create Template**:
 
@@ -133,7 +133,7 @@ your PC.
 
 <table>
   <tr>
-    <td align="center"><img src="media/jumper-flashing.png" width="280"><br><b>PC3V3</b> - flashing/provisioning (this step)</td>
+    <td align="center"><img src="media/jumper-flashing.png" width="270"><br><b>PC3V3</b> - flashing/provisioning (this step)</td>
     <td align="center"><img src="media/jumper-running.png" width="280"><br><b>HOST3V3</b> - normal operation (Step 6)</td>
   </tr>
 </table>
@@ -197,26 +197,26 @@ printed certificate into the IoTConnect console in the next step.
 
 2. Set the Unique ID and Device Name:
 
-   <img src="media/device-name.png" width="300"/>
+   <img src="media/device-name.png" width="700"/>
 
    - **Unique ID**: must be the **exact same** `MYUNIQUEID` value you passed
      to `provision_rnwf11_cert.py`/`.ps1` earlier - this is the DUID and
      it's what ties everything together.
    - **Device Name**: a separate display name shown in the
      /IOTCONNECT console with looser character constraints (e.g. can use spaces)
-     
+
 3. Select your **Entity**:
 
-   <img src="media/select-entity.png" width="300"/>
+   <img src="media/select-entity.png" width="400"/>
 
 4. Select the template you imported earlier:
 
-   <img src="media/template-select.png" width="300"/>
+   <img src="media/template-select.png" width="500"/>
 
 5. Under **Device certificate**, choose **Use my certificate**, and paste
    the certificate PEM that `provision_rnwf11_cert.py`/`.ps1` printed:
 
-   <img src="media/use-my-cert.png" width="300"/>
+   <img src="media/use-my-cert.png" width="400"/>
 
 6. Click **Save & View**.
 
