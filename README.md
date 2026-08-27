@@ -331,7 +331,7 @@ Once provisioning completes, the device connects to WiFi, then to /IOTCONNECT
 over MQTT via the RNWF11, and publishes `{"random": <0-100>}` every 10 seconds.
 Watch it arrive on the device's **Live Data** tab in the /IOTCONNECT console.
 
-<img src="media/live-data.png" width="600"/>
+<img src="media/live-data.png"/>
 
 ## 10. Resources
 
