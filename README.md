@@ -189,19 +189,36 @@ printed certificate into the IoTConnect console in the next step.
 
 ## 5. Create the Device in /IOTCONNECT
 
-<!-- TODO: screenshot of creating a device with "Use my certificate", pasting
-     in the certificate printed by provision_rnwf11_cert.py -->
+1. After logging into your /IOTCONNECT account on
+   [console.iotconnect.io](https://console.iotconnect.io), go to the
+   **Device** page and click **Create Device**:
 
-Go to **Device &rarr; Devices** and create a new device using the template
-you imported earlier, with **"Use my certificate"** as the authentication
-type and the certificate that script printed. The form asks for two
-different names - don't mix them up:
-- **Device ID**: must be the **exact same** `MYUNIQUEID` value you passed to
-  `provision_rnwf11_cert.py`/`.ps1` earlier - this is the Unique ID (DUID)
-  and it's what ties everything together.
-- **Device Name**: a separate, freeform display name shown in the
-  IoTConnect console - it can be anything you want (spaces included, e.g.
-  "My Desk dsPIC33") and doesn't need to match anything else in this guide.
+   <img src="media/create-device-button.png" width="300"/>
+
+2. Set the Unique ID and Device Name:
+
+   <img src="media/device-name.png" width="300"/>
+
+   - **Unique ID**: must be the **exact same** `MYUNIQUEID` value you passed
+     to `provision_rnwf11_cert.py`/`.ps1` earlier - this is the DUID and
+     it's what ties everything together.
+   - **Device Name**: a separate display name shown in the
+     /IOTCONNECT console with looser character constraints (e.g. can use spaces)
+     
+3. Select your **Entity**:
+
+   <img src="media/select-entity.png" width="300"/>
+
+4. Select the template you imported earlier:
+
+   <img src="media/template-select.png" width="300"/>
+
+5. Under **Device certificate**, choose **Use my certificate**, and paste
+   the certificate PEM that `provision_rnwf11_cert.py`/`.ps1` printed:
+
+   <img src="media/use-my-cert.png" width="300"/>
+
+6. Click **Save & View**.
 
 ## 6. Mount the RNWF11 on the Curiosity Board
 
@@ -223,20 +240,19 @@ This quickstart ships a pre-built firmware image at
 [`bin/dspic33ak512mps512_rnwf11_iotconnect.hex`](bin/) - you don't need
 MPLAB X or to build anything to run the demo.
 
-1. Open MPLAB IPE.
-2. Select the **dsPIC33AK512MPS512** device (**1** in the screenshot below -
-   start typing `dsPIC33AK512...` and the dropdown will narrow down to it)
-   and the **PKOB4** tool (**2** - should be the only option unless you have
-   other Microchip hardware connected).
-3. Browse to `bin/dspic33ak512mps512_rnwf11_iotconnect.hex` (**3**) - do
-   this **before** connecting (see the note below).
-4. Click **Connect** (**4**).
-5. Click **Program** (**5**, only enabled once connected).
+After opening the MPLAB IPE:
+
+1. Select the **dsPIC33AK512MPS512** device (start typing `dsPIC33AK512...` and the dropdown will narrow down to it)
+2. Select the **PKOB4** tool (should be the only option unless you have other Microchip hardware connected).
+3. Browse to `bin/dspic33ak512mps512_rnwf11_iotconnect.hex`
+4. Click **Connect**
+5. Click **Program**
+
+<img src="media/ipe-steps.png" width="600"/>
+
 6. Unplug and replug the board's power to make sure the new firmware starts
    running.
 7. Open a serial terminal at 115200 8-N-1 to watch the boot log.
-
-<img src="media/ipe-steps.png" width="600"/>
 
 > [!TIP]
 > **Program** only becomes clickable if you selected the `.hex` file

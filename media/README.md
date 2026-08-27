@@ -13,3 +13,7 @@ Already in place:
 - `wifi-install.png` - the RNWF11 correctly installed in mikroBUS A (green check) vs. mikroBUS B (red X), shown in Step 6
 - `live-data.png` - the /IOTCONNECT Live Data tab showing incoming "random" telemetry, shown in Step 9
 - `ipe-steps.png` - MPLAB IPE with each button numbered (device/tool select, browse, connect, program), shown in Step 7
+- `create-device-button.png` / `device-name.png` / `select-entity.png` / `use-my-cert.png` - device-creation walkthrough
+  in Step 5 (copied from `iotc-python-lite-sdk-demos/common/media`, matching the stm32-n6 repo's Step 8)
+- `template-select.png` - this repo's own template-selection screenshot, standing in for the shared
+  `template-name.png` in Step 5 (since we're picking a different template)
