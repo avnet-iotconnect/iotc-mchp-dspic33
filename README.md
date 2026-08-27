@@ -41,6 +41,9 @@ before the final config-provisioning step can talk to it.
 ### Hardware
 
 1. [dsPIC33 Curiosity Platform Development Board](https://www.microchip.com/en-us/development-tool/ev74h48a) with the dsPIC33AK512MPS512 General Purpose DIM installed
+
+   <img src="media/module-install.png" width="300"/>
+
 2. [RNWF11 UART to Cloud Add-on Board (EV12H55A)](https://www.microchip.com/en-us/development-tool/ev12h55a)
 3. Two USB cables: one for the Curiosity board's onboard debugger/console, one for the RNWF11's own USB-C port (used only during provisioning)
 4. A 2.4 GHz WiFi network and its credentials
@@ -125,11 +128,15 @@ The RNWF11 board has its own USB-C port and power-select jumper
 (`PC3V3` / `HOST3V3`), independent of the Curiosity board - this step uses it
 standalone, **not** mounted on the Curiosity board yet.
 
-<!-- TODO: close-up photo of the RNWF11's power jumper, labeled with both positions -->
-![RNWF11 power jumper](media/rnwf11-jumper.png)
-
 Move the jumper to **PC3V3** and plug the RNWF11's USB-C port directly into
 your PC.
+
+<table>
+  <tr>
+    <td align="center"><img src="media/jumper-flashing.png" width="280"><br><b>PC3V3</b> - flashing/provisioning (this step)</td>
+    <td align="center"><img src="media/jumper-running.png" width="280"><br><b>HOST3V3</b> - normal operation (Step 6)</td>
+  </tr>
+</table>
 
 **Before running the command below**, find the serial port name it just
 enumerated as - **the full path/name, not just the last part** (e.g.
@@ -203,8 +210,12 @@ Curiosity board's **mikroBUS A** socket specifically - this firmware is wired
 for that socket (UART2 on RP72/RP73, mapped via Peripheral Pin Select in
 `mcc_generated_files/system/src/pins.c`).
 
-<!-- TODO: photo of the RNWF11 mounted on mikroBUS A -->
-![RNWF11 mounted on mikroBUS A](media/rnwf11-mounted.png)
+<img src="media/wifi-install.png" width="350"/>
+
+> [!IMPORTANT]
+> It must go in **mikroBUS A**, not mikroBUS B - the demo will not work if
+> it's installed in mikroBUS B, since the firmware only routes UART2 to
+> mikroBUS A's pins.
 
 ## 7. Flash the Firmware
 
@@ -212,18 +223,20 @@ This quickstart ships a pre-built firmware image at
 [`bin/dspic33ak512mps512_rnwf11_iotconnect.hex`](bin/) - you don't need
 MPLAB X or to build anything to run the demo.
 
-1. Open MPLAB IPE, select the dsPIC33AK512MPS512 device and the onboard PKOB4 tool.
-2. Browse to `bin/dspic33ak512mps512_rnwf11_iotconnect.hex` - do this
-   **before** connecting (see the note below).
-3. Click **Connect**, then click **Program** (only enabled once connected).
-4. If IPE's output ends with `Hold In Reset mode is enabled`, the chip is
-   being deliberately held in reset and won't start running the firmware
-   yet - go to IPE's **Settings** menu and select **Release from Reset**
-   (a radio option next to **Hold in Reset**; or just unplug and replug the
-   board's power) before continuing.
-5. Open a serial terminal at 115200 8-N-1 to watch the boot log.
+1. Open MPLAB IPE.
+2. Select the **dsPIC33AK512MPS512** device (**1** in the screenshot below -
+   start typing `dsPIC33AK512...` and the dropdown will narrow down to it)
+   and the **PKOB4** tool (**2** - should be the only option unless you have
+   other Microchip hardware connected).
+3. Browse to `bin/dspic33ak512mps512_rnwf11_iotconnect.hex` (**3**) - do
+   this **before** connecting (see the note below).
+4. Click **Connect** (**4**).
+5. Click **Program** (**5**, only enabled once connected).
+6. Unplug and replug the board's power to make sure the new firmware starts
+   running.
+7. Open a serial terminal at 115200 8-N-1 to watch the boot log.
 
-<!-- TODO: screenshot of MPLAB IPE programming the board -->
+<img src="media/ipe-steps.png" width="600"/>
 
 > [!TIP]
 > **Program** only becomes clickable if you selected the `.hex` file
@@ -312,34 +325,19 @@ UART.
 > those gaps, printing `No response yet...` while it does. That's normal,
 > not a failure.
 
-> [!NOTE]
-> The broker host/topic are resolved once, here, rather than re-resolved by
-> the firmware on every boot - see [developer.md](developer.md#2-project-architecture)
-> for why. If /IOTCONNECT ever reassigns your device to a different broker,
-> re-run this script.
-
 ## 9. Running the Demo
 
 Once provisioning completes, the device connects to WiFi, then to /IOTCONNECT
 over MQTT via the RNWF11, and publishes `{"random": <0-100>}` every 10 seconds.
 Watch it arrive on the device's **Live Data** tab in the /IOTCONNECT console.
 
-<!-- TODO: screenshot of the console debug log showing a successful connect + publish -->
-<!-- TODO: screenshot of the /IOTCONNECT Live Data tab showing incoming "random" values -->
+<img src="media/live-data.png" width="600"/>
 
 ## 10. Resources
 
 - [developer.md](developer.md) - building from source, project architecture, and how to modify the firmware
-- [dsPIC33A Curiosity OOB Demo](https://github.com/microchip-pic-avr-examples/dspic33a-curiosity-oob) - the base this project's clock/pin configuration borrows from
+- [Microchip's dsPIC33A Curiosity OOB Demo](https://github.com/microchip-pic-avr-examples/dspic33a-curiosity-oob)
 - [RNWF11 UART to Cloud Add-on Board User's Guide](https://ww1.microchip.com/downloads/aemDocuments/documents/WSG/ProductDocuments/UserGuides/RNWF11-UART-to-Cloud-Add-on-Board-User-Guide-DS50003638.pdf)
 - [RNWF11 Application Developer's Guide](https://onlinedocs.microchip.com/oxy/GUID-209426F5-2F78-4B3F-80A0-AD79A119381E) (AT command reference)
 - [iotc-c-lib](https://github.com/avnet-iotconnect/iotc-c-lib) - /IOTCONNECT's C SDK
-- [iotc-python-lite-sdk-demos](https://github.com/avnet-iotconnect/iotc-python-lite-sdk-demos) - the same minimal-quickstart pattern for other boards
-- [iotc-mchp-sama7d65-rnwf11](https://github.com/avnet-iotconnect/iotc-mchp-sama7d65-rnwf11) - an earlier, unconventional use of the RNWF11 (host-side TLS instead of on-module)
-
-## Licensing
-
-This repository is MIT licensed - see [LICENSE.md](LICENSE.md) - **except**
-`firmware/dspic33ak512mps512_rnwf11_iotconnect.X/rnwf11/`, which is ported
-from Microchip's reference firmware and remains under Microchip's SLA001
-license (each file retains its original Microchip license header).
+- [iotc-mchp-sama7d65-rnwf11](https://github.com/avnet-iotconnect/iotc-mchp-sama7d65-rnwf11) - another /IOTCONNECT demo using the RNWF11 with Linux host-side TLS instead of on-module
