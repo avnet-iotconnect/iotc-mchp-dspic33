@@ -47,6 +47,10 @@ static bool IOTC_RNWF11_CommandWithTimeout(const char *command, uint32_t timeout
     char response[IOTC_RNWF11_RESPONSE_SIZE];
     uint16_t length = 0;
 
+    if (UART1_IsReceiveBufferOverFlowDetected())
+    {
+        UART1_ReceiveBufferOverrunErrorFlagClear();
+    }
     while (!U1STAHbits.URXBE)
     {
         (void)U1RXREG;
@@ -55,6 +59,18 @@ static bool IOTC_RNWF11_CommandWithTimeout(const char *command, uint32_t timeout
     IOTC_RNWF11_Write(command);
     while (timeout-- != 0U)
     {
+        if (UART1_IsReceiveBufferOverFlowDetected())
+        {
+            // Once OERR is set, UART1's receive path stops accepting new
+            // data until this is explicitly cleared (see the doc comment on
+            // UART1_ReceiveBufferOverrunErrorFlagClear() in hal/uart1.h) -
+            // without this, a single overrun here (e.g. a motor-control ISR
+            // briefly delaying this busy-wait poll of U1RXREG) permanently
+            // wedges RX for every AT command for the rest of the program,
+            // not just this one call.
+            UART1_ReceiveBufferOverrunErrorFlagClear();
+            return false;
+        }
         if (!U1STAHbits.URXBE)
         {
             char character = (char)U1RXREG;

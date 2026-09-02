@@ -55,7 +55,11 @@ function New-DeviceCert {
     Write-Host "device (Unique ID `"$Duid`", `"Use my certificate`"):`n"
     Get-Content $certPath | Write-Host
 
-    return @{ CertPath = $certPath; KeyPath = $keyPath }
+    # Resolve to absolute paths before returning: [System.IO.File]::ReadAllBytes()
+    # below resolves relative paths against the .NET process's own working
+    # directory, which does NOT always track PowerShell's Set-Location/$PWD -
+    # a relative $OutDir here can otherwise silently read from the wrong place.
+    return @{ CertPath = (Resolve-Path $certPath).Path; KeyPath = (Resolve-Path $keyPath).Path }
 }
 
 function Get-Crc16Xmodem {
@@ -222,6 +226,8 @@ if (-not (Test-Path $CaCertPath)) {
     Write-Host "FAILED: CA cert not found: $CaCertPath"
     exit 1
 }
+# Resolve to an absolute path - see the matching comment in New-DeviceCert.
+$CaCertPath = (Resolve-Path $CaCertPath).Path
 
 try {
     $cert = New-DeviceCert -Duid $Duid -OutDir $OutDir

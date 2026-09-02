@@ -153,7 +153,7 @@ for you, which is the right CA cert if your IoTConnect account is AWS-backed
 (the common case). If your account is Azure-backed instead, download your
 own CA cert first and replace `AmazonRootCA1.pem`/`-CaCertPath` with its path.
 
-Then, in the command below, replace `MYDEVICENAME` with the port you just
+Then, in the command below, replace `MYPORTNAME` with the port you just
 found, and `MYUNIQUEID` with a Unique ID of your own choosing for this
 device - pick something memorable, e.g. `my-desk-dspic33`. You'll reuse
 whatever you pick later, both when creating the device in IoTConnect and
@@ -164,7 +164,7 @@ when provisioning WiFi/IoTConnect config, so make a note of it. From the
 ```bash
 cd tools
 curl -fsSLO https://www.amazontrust.com/repository/AmazonRootCA1.pem
-python3 provision_rnwf11_cert.py --port MYDEVICENAME --duid MYUNIQUEID \
+python3 provision_rnwf11_cert.py --port MYPORTNAME --duid MYUNIQUEID \
     --ca-cert-path AmazonRootCA1.pem
 cd ..
 ```
@@ -173,7 +173,7 @@ cd ..
 ```powershell
 Set-Location tools
 Invoke-WebRequest https://www.amazontrust.com/repository/AmazonRootCA1.pem -OutFile AmazonRootCA1.pem
-.\provision_rnwf11_cert.ps1 -Port MYDEVICENAME -Duid MYUNIQUEID `
+.\provision_rnwf11_cert.ps1 -Port MYPORTNAME -Duid MYUNIQUEID `
     -CaCertPath AmazonRootCA1.pem
 Set-Location ..
 ```
@@ -294,7 +294,7 @@ board enumerates the PKOB4 and MCP2221A ports separately):
 - **Windows**: open Device Manager &rarr; **Ports (COM & LPT)** - look for
   "MCP2221 USB-UART Combo" (or similar) and note its `COMx` number.
 
-Then, in the command below, replace: `MYDEVICENAME` with that port;
+Then, in the command below, replace: `MYPORTNAME` with that port;
 `MYWIFINETWORK`/`MYWIFIPASSWORD` with your WiFi credentials (kept in quotes
 since either may contain spaces); `MYCPID` and `MYENVIRONMENT` with the
 values under **Settings &rarr; Key Vault** in the IoTConnect console; and
@@ -307,7 +307,7 @@ files into:
 **Linux/macOS:**
 ```bash
 cd tools
-python3 provision_device_config.py --port MYDEVICENAME \
+python3 provision_device_config.py --port MYPORTNAME \
     --wifi-ssid "MYWIFINETWORK" --wifi-password "MYWIFIPASSWORD" \
     --cpid MYCPID --env MYENVIRONMENT --duid MYUNIQUEID \
     --ca-name root-ca --cert-name device-cert --key-name device-key
@@ -317,7 +317,7 @@ cd ..
 **Windows (PowerShell):**
 ```powershell
 Set-Location tools
-.\provision_device_config.ps1 -Port MYDEVICENAME `
+.\provision_device_config.ps1 -Port MYPORTNAME `
     -WifiSsid "MYWIFINETWORK" -WifiPassword "MYWIFIPASSWORD" `
     -Cpid MYCPID -Env MYENVIRONMENT -Duid MYUNIQUEID `
     -CaName root-ca -CertName device-cert -KeyName device-key
