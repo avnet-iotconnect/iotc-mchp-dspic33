@@ -1,3 +1,6 @@
 [submodule "firmware/dspic33ak512mps512_rnwf11_iotconnect.X/Libraries/iotc-c-lib"]
 	path = firmware/dspic33ak512mps512_rnwf11_iotconnect.X/Libraries/iotc-c-lib
 	url = https://github.com/avnet-iotconnect/iotc-c-lib.git
+[submodule "firmware/dspic33ck256mp508_rnwf11_iotconnect.X/Libraries/iotc-c-lib"]
+	path = firmware/dspic33ck256mp508_rnwf11_iotconnect.X/Libraries/iotc-c-lib
+	url = https://github.com/avnet-iotconnect/iotc-c-lib.git

@@ -61,6 +61,15 @@
         <itemPath>../hal/pwm.c</itemPath>
         <itemPath>../hal/board_service.c</itemPath>
         <itemPath>../hal/measure.c</itemPath>
+        <itemPath>../hal/time_stub.c</itemPath>
+      </logicalFolder>
+      <logicalFolder name="iotc-c-lib" displayName="iotc-c-lib" projectFiles="true">
+        <itemPath>../Libraries/iotc-c-lib/core/src/iotcl.c</itemPath>
+        <itemPath>../Libraries/iotc-c-lib/core/src/iotcl_c2d.c</itemPath>
+        <itemPath>../Libraries/iotc-c-lib/core/src/iotcl_internal.c</itemPath>
+        <itemPath>../Libraries/iotc-c-lib/core/src/iotcl_telemetry.c</itemPath>
+        <itemPath>../Libraries/iotc-c-lib/core/src/iotcl_util.c</itemPath>
+        <itemPath>../Libraries/iotc-c-lib/lib/cJSON/cJSON.c</itemPath>
       </logicalFolder>
       <logicalFolder name="iotconnect" displayName="iotconnect" projectFiles="true">
         <itemPath>../iotconnect/iotconnect_rnwf11.c</itemPath>
@@ -86,7 +95,7 @@
         <platform>3</platform>
       </toolsSet>
       <packs>
-        <pack name="dsPIC33CK-MP_DFP" vendor="Microchip" version="1.11.346"/>
+        <pack name="dsPIC33CK-MP_DFP" vendor="Microchip" version="1.15.423"/>
       </packs>
       <ScriptingSettings>
       </ScriptingSettings>
@@ -134,7 +143,7 @@
         <property key="enable-unroll-loops" value="false"/>
         <property key="expand-pragma-config" value="false"/>
         <property key="extra-include-directories"
-                  value="..\hal;..;..\iotconnect;..\library\library-motor"/>
+                  value="..\hal;..;..\iotconnect;..\library\library-motor;..\Libraries\iotc-c-lib\core\include;..\Libraries\iotc-c-lib\lib\cJSON"/>
         <property key="isolate-each-function" value="false"/>
         <property key="keep-inline" value="false"/>
         <property key="oXC16gcc-cnsts-mauxflash" value="false"/>

@@ -8,6 +8,8 @@
 #include "uart2.h"
 #include "iotconnect_rnwf11.h"
 #include "iotconnect_rnwf11_config.h"
+#include "iotcl.h"
+#include "iotcl_telemetry.h"
 
 #define IOTC_RNWF11_RESPONSE_SIZE 384U
 #define IOTC_RNWF11_COMMAND_TIMEOUT 5000000UL
@@ -288,28 +290,87 @@ static bool IOTC_RNWF11_Configure(void)
     return mqttLinkUp;
 }
 
+#define IOTC_RNWF11_ESCAPED_JSON_MAX 256U
+
+/* AT+MQTTPUB wraps the message in "..." with no escaping of its own - any
+ * '"' inside the JSON payload prematurely closes that quoted argument. Keys
+ * stay abbreviated (see IOTC_RNWF11_PublishMotorState) since iotc-c-lib's
+ * "d"-envelope already adds back some of the line-length budget that saved. */
+static bool IOTC_RNWF11_EscapeJsonForAtCommand(const char *json, char *out, size_t out_size)
+{
+    size_t o = 0;
+    for (size_t i = 0; json[i] != '\0'; i++)
+    {
+        char c = json[i];
+        bool needs_escape = (c == '"') || (c == '\\');
+        size_t needed = needs_escape ? 2U : 1U;
+        if (o + needed >= out_size)
+        {
+            return false;
+        }
+        if (needs_escape)
+        {
+            out[o++] = '\\';
+        }
+        out[o++] = c;
+    }
+    out[o] = '\0';
+    return true;
+}
+
 static bool IOTC_RNWF11_PublishMotorState(void)
 {
-    char command[384];
-#if IOTC_PUBLISH_TEST == 1
-    /* No quotes or braces, to tell an escaping fault from a dead connection. */
-    snprintf(command, sizeof(command), "AT+MQTTPUB=1,1,0,\"%s\",\"hello\"\r\n",
-             IOTC_MQTT_TELEMETRY_TOPIC);
-#elif IOTC_PUBLISH_TEST == 2
-    /* Escaped JSON but short, to tell escaping apart from command length. */
-    snprintf(command, sizeof(command),
-             "AT+MQTTPUB=1,1,0,\"%s\",\"{\\\"a\\\":1}\"\r\n",
-             IOTC_MQTT_TELEMETRY_TOPIC);
-#else
+    IotclMessageHandle msg = iotcl_telemetry_create();
+    if (msg == NULL)
+    {
+        DEBUG_Printf("IOTC: iotcl_telemetry_create failed\r\n");
+        return false;
+    }
+
     /* Keys are abbreviated: the full names overflow the module's AT line limit. */
-    snprintf(command, sizeof(command),
-             "AT+MQTTPUB=1,1,0,\"%s\",\"{\\\"run\\\":%u,\\\"st\\\":%u,\\\"sec\\\":%u,\\\"rpm\\\":%u,\\\"spd\\\":%u,\\\"ic\\\":%d,\\\"im\\\":%d,\\\"duty\\\":%d,\\\"vdc\\\":%d}\"\r\n",
-             IOTC_MQTT_TELEMETRY_TOPIC, telemetry.motorRunning, telemetry.state,
-             telemetry.sector, telemetry.requestedSpeedRpm, telemetry.measuredSpeedRpm,
-             telemetry.requestedCurrent, telemetry.measuredCurrent, telemetry.dutyCycle,
-             telemetry.dcBusAdc);
-#endif
-    return IOTC_RNWF11_Step("MQTTPUB", command);
+    iotcl_telemetry_set_number(msg, "run", telemetry.motorRunning);
+    iotcl_telemetry_set_number(msg, "st", telemetry.state);
+    iotcl_telemetry_set_number(msg, "sec", telemetry.sector);
+    iotcl_telemetry_set_number(msg, "rpm", telemetry.requestedSpeedRpm);
+    iotcl_telemetry_set_number(msg, "spd", telemetry.measuredSpeedRpm);
+    iotcl_telemetry_set_number(msg, "ic", telemetry.requestedCurrent);
+    iotcl_telemetry_set_number(msg, "im", telemetry.measuredCurrent);
+    iotcl_telemetry_set_number(msg, "duty", telemetry.dutyCycle);
+    iotcl_telemetry_set_number(msg, "vdc", telemetry.dcBusAdc);
+
+    char *json = iotcl_telemetry_create_serialized_string(msg, false);
+    iotcl_telemetry_destroy(msg);
+    if (json == NULL)
+    {
+        DEBUG_Printf("IOTC: iotcl_telemetry_create_serialized_string failed\r\n");
+        return false;
+    }
+
+    char escaped[IOTC_RNWF11_ESCAPED_JSON_MAX];
+    bool escapedOk = IOTC_RNWF11_EscapeJsonForAtCommand(json, escaped, sizeof(escaped));
+
+    bool sent = false;
+    if (!escapedOk)
+    {
+        DEBUG_Printf("IOTC: telemetry JSON too long to escape (%s)\r\n", json);
+    }
+    else
+    {
+        char command[384];
+        int written = snprintf(command, sizeof(command), "AT+MQTTPUB=1,1,0,\"%s\",\"%s\"\r\n",
+                                IOTC_MQTT_TELEMETRY_TOPIC, escaped);
+        if ((written < 0) || ((size_t)written >= sizeof(command)))
+        {
+            DEBUG_Printf("IOTC: telemetry command too long to send\r\n");
+        }
+        else
+        {
+            sent = IOTC_RNWF11_Step("MQTTPUB", command);
+        }
+    }
+
+    iotcl_telemetry_destroy_serialized_string(json);
+    return sent;
 }
 
 void IOTC_RNWF11_Initialize(void)
@@ -318,6 +379,11 @@ void IOTC_RNWF11_Initialize(void)
     IOTC_RNWF11_UART2_Initialize();
     iotcModulePresent = IOTC_RNWF11_CommandWithTimeout("AT\r\n", IOTC_RNWF11_PROBE_TIMEOUT);
     iotcConnected = false;
+
+    IotclClientConfig iotcl_cfg;
+    iotcl_init_client_config(&iotcl_cfg);
+    iotcl_cfg.device.instance_type = IOTCL_DCT_CUSTOM; // broker/topic are resolved at provisioning time - see iotconnect_rnwf11_config.h
+    iotcl_init(&iotcl_cfg);
 
 #if !IOTC_RNWF11_RX_RPn
     DEBUG_Printf("IOTC: UART2 pins unset, set IOTC_RNWF11_RX_RPn/TX_RPnR\r\n");
