@@ -55,8 +55,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "bldc_main.h"
-#include "diagnostics.h"
 #include "board_service.h"
+#include "debug_console.h"
+#include "iotconnect_rnwf11_config.h"
 #include "port_config.h"
 #include "general.h"
 #include "clock.h"
@@ -75,7 +76,8 @@ MCAPP_DATA_T     mcappData;
 int main(void)
 {
     HAL_SystemInitialize();
-	DiagnosticsInit();
+    DEBUG_Initialize();
+    DEBUG_Printf("\r\nMCSK BLDC + IoTConnect\r\n");
     HAL_BoardServiceInit();
     mcappData.state = MCAPP_INIT;
     HAL_MC1HallStateChangeTimerPrescalerSet(SPEED_MEASURE_TIMER_PRESCALER);
@@ -97,7 +99,6 @@ int main(void)
             .dutyCycle = mcappData.dutyCycle,
             .dcBusAdc = mcappData.analogInputs.measureVdc.value
         };
-        DiagnosticsStepMain();
         HAL_BoardService();
 
         if(HAL_IsPressed_Button1())
@@ -167,11 +168,10 @@ void MCAPP_CheckHallUpdatePWM(void)
 /******************************************************************************
  * Description: The ADCAN19 Interrupt operates at 20kHz. The analog data such as 
  *              the potentiometer voltage, Bus Current are read. It services
- *              the X2C Scope ISR, The MCAPP_StateMachine routines as well.
+ *              the MCAPP_StateMachine routine as well.
  *****************************************************************************/
 void __attribute__((__interrupt__,no_auto_psv)) HAL_MC1ADCInterrupt()
 {
-    DiagnosticsStepIsr();
     static uint8_t iotcTickDivider;
     if (++iotcTickDivider >= 20U)
     {

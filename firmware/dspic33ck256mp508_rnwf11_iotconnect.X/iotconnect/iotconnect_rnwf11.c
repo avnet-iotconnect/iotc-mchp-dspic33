@@ -2,18 +2,27 @@
 #include <string.h>
 #include <xc.h>
 #include "clock.h"
-#include "uart1.h"
+#include <libpic30.h> /* needs FCY from clock.h */
+#include "debug_console.h"
+#include "uart2.h"
 #include "iotconnect_rnwf11.h"
 #include "iotconnect_rnwf11_config.h"
 
-#define IOTC_RNWF11_RESPONSE_SIZE 192U
+#define IOTC_RNWF11_RESPONSE_SIZE 384U
 #define IOTC_RNWF11_COMMAND_TIMEOUT 5000000UL
 #define IOTC_RNWF11_PROBE_TIMEOUT 200000UL
 
 static bool iotcConnected;
 static bool iotcModulePresent;
 static volatile uint32_t telemetryMilliseconds;
+static volatile uint32_t retryMilliseconds;
 static IOTC_RNWF11_Telemetry_t telemetry;
+static char lastResponse[IOTC_RNWF11_RESPONSE_SIZE];
+static bool lastOverrun;
+static bool mqttLinkUp;
+/* Assume up: the module stays associated across dsPIC resets and only
+ * re-announces its IP on a fresh association. */
+static bool netUp = true;
 
 static bool IOTC_RNWF11_IsConfigured(void)
 {
@@ -23,54 +32,78 @@ static bool IOTC_RNWF11_IsConfigured(void)
            (IOTC_MQTT_TELEMETRY_TOPIC[0] != '\0');
 }
 
-static void IOTC_RNWF11_UART1_Initialize(void)
+static void IOTC_RNWF11_UART2_Initialize(void)
 {
-    UART1_Initialize();
-    UART1_SpeedModeHighSpeed();
-    UART1_BaudRateDividerSet((uint16_t)((FCY / (4UL * IOTC_RNWF11_BAUD)) - 1UL));
-    UART1_ModuleEnable();
+    UART2_Initialize(IOTC_RNWF11_BAUD);
+}
+
+/* The module echoes every character, so keep draining while transmitting. */
+static void IOTC_RNWF11_Collect(uint16_t *length)
+{
+    while (UART2_IsReceiveDataAvailable())
+    {
+        char c = (char)UART2_Read();
+        if (*length < (IOTC_RNWF11_RESPONSE_SIZE - 1U))
+        {
+            lastResponse[*length] = c;
+            (*length)++;
+            lastResponse[*length] = '\0';
+        }
+    }
+}
+
+/* The module echoes every character; discard it so long commands still fit. */
+static void IOTC_RNWF11_DiscardEcho(void)
+{
+    while (UART2_IsReceiveDataAvailable())
+    {
+        (void)UART2_Read();
+    }
 }
 
 static void IOTC_RNWF11_Write(const char *text)
 {
     while (*text != '\0')
     {
-        while (U1STAHbits.UTXBF)
+        UART2_Write((uint8_t)*text++);
+        while (!UART2_IsTransmitComplete())
         {
+            IOTC_RNWF11_DiscardEcho();
         }
-        U1TXREG = (uint8_t)*text++;
+        IOTC_RNWF11_DiscardEcho();
     }
 }
 
+static void IOTC_RNWF11_PollEvents(void);
+
 static bool IOTC_RNWF11_CommandWithTimeout(const char *command, uint32_t timeout)
 {
-    char response[IOTC_RNWF11_RESPONSE_SIZE];
     uint16_t length = 0;
 
-    while (!U1STAHbits.URXBE)
-    {
-        (void)U1RXREG;
-    }
+    /* Print anything pending rather than discarding a failure notification. */
+    IOTC_RNWF11_PollEvents();
+
+    lastResponse[0] = '\0';
+    UART2_ReceiveFlush();
+    lastOverrun = false;
 
     IOTC_RNWF11_Write(command);
+
     while (timeout-- != 0U)
     {
-        if (!U1STAHbits.URXBE)
+        IOTC_RNWF11_Collect(&length);
+        if (UART2_IsOverrun())
         {
-            char character = (char)U1RXREG;
-            if (length < (sizeof(response) - 1U))
-            {
-                response[length++] = character;
-                response[length] = '\0';
-            }
-            if (strstr(response, "ERROR") != NULL)
-            {
-                return false;
-            }
-            if (strstr(response, "OK") != NULL)
-            {
-                return true;
-            }
+            lastOverrun = true;
+            UART2_ClearOverrun();
+        }
+        if (strstr(lastResponse, "ERROR") != NULL)
+        {
+            return false;
+        }
+        if (strstr(lastResponse, "OK") != NULL)
+        {
+            return true;
         }
     }
     return false;
@@ -81,61 +114,166 @@ static bool IOTC_RNWF11_Command(const char *command)
     return IOTC_RNWF11_CommandWithTimeout(command, IOTC_RNWF11_COMMAND_TIMEOUT);
 }
 
+/* Labelled so failures are traceable without printing Wi-Fi credentials. */
+static bool IOTC_RNWF11_Step(const char *label, const char *command)
+{
+    if (IOTC_RNWF11_Command(command))
+    {
+        return true;
+    }
+    DEBUG_Printf("IOTC: step %s failed%s, resp=[%s]\r\n",
+                 label, lastOverrun ? " (rx overrun)" : "",
+                 (lastResponse[0] != '\0') ? lastResponse : "<timeout>");
+    return false;
+}
+
+/* Sends a query and prints whatever comes back, ignoring OK/ERROR. */
+static void IOTC_RNWF11_Query(const char *command)
+{
+    uint16_t length = 0;
+
+    lastResponse[0] = '\0';
+    UART2_ReceiveFlush();
+    IOTC_RNWF11_Write(command);
+
+    for (uint16_t slice = 0; slice < 2000U; slice++)
+    {
+        __delay_us(250);
+        IOTC_RNWF11_Collect(&length);
+    }
+    DEBUG_Printf("IOTC: query -> [%s]\r\n", lastResponse);
+}
+
+static void IOTC_RNWF11_Diagnose(void)
+{
+    static const char *const queries[] = {
+        "AT+TLSC=1\r\n",   /* did the certificate names actually stick */
+        "AT+MQTTC\r\n",    /* host, port, client id, TLS selection */
+    };
+
+    DEBUG_Printf("IOTC: --- diagnostics ---\r\n");
+    for (uint16_t i = 0; i < (sizeof(queries) / sizeof(queries[0])); i++)
+    {
+        IOTC_RNWF11_Query(queries[i]);
+    }
+    DEBUG_Printf("IOTC: --- end ---\r\n");
+}
+
+/* Expected to fail once the station is associated, so do not log it. */
+static void IOTC_RNWF11_StepQuiet(const char *command)
+{
+    (void)IOTC_RNWF11_Command(command);
+}
+
+/* Best effort: the module may already keep time, so a failure is not fatal. */
+static void IOTC_RNWF11_StepOptional(const char *label, const char *command)
+{
+    (void)IOTC_RNWF11_Step(label, command);
+}
+
 static bool IOTC_RNWF11_Configure(void)
 {
     char command[256];
 
-    if (!IOTC_RNWF11_Command("AT\r\n")) return false;
-    snprintf(command, sizeof(command), "AT+WSTAC=1,\"%s\"\r\n", IOTC_WIFI_SSID);
-    if (!IOTC_RNWF11_Command(command)) return false;
-    snprintf(command, sizeof(command), "AT+WSTAC=2,%u\r\n", IOTC_WIFI_SECURITY);
-    if (!IOTC_RNWF11_Command(command)) return false;
-    snprintf(command, sizeof(command), "AT+WSTAC=3,\"%s\"\r\n", IOTC_WIFI_PASSWORD);
-    if (!IOTC_RNWF11_Command(command)) return false;
-    if (!IOTC_RNWF11_Command("AT+WSTA=1\r\n")) return false;
+    /* Order follows RNWF11 Developer's Guide, Appendix A.6 (AWS via AT). */
+    if (!IOTC_RNWF11_Step("AT", "AT\r\n")) return false;
 
     snprintf(command, sizeof(command), "AT+TLSC=1,1,\"%s\"\r\n", IOTC_RNWF11_CA_NAME);
-    if (!IOTC_RNWF11_Command(command)) return false;
-    snprintf(command, sizeof(command), "AT+TLSC=1,2,\"%s\"\r\n", IOTC_RNWF11_CERT_NAME);
-    if (!IOTC_RNWF11_Command(command)) return false;
-    snprintf(command, sizeof(command), "AT+TLSC=1,3,\"%s\"\r\n", IOTC_RNWF11_KEY_NAME);
-    if (!IOTC_RNWF11_Command(command)) return false;
+    if (!IOTC_RNWF11_Step("TLSC1-ca", command)) return false;
+    if (IOTC_RNWF11_CERT_NAME[0] != '\0')
+    {
+        snprintf(command, sizeof(command), "AT+TLSC=1,2,\"%s\"\r\n", IOTC_RNWF11_CERT_NAME);
+        if (!IOTC_RNWF11_Step("TLSC2-cert", command)) return false;
+    }
+    if (IOTC_RNWF11_KEY_NAME[0] != '\0')
+    {
+        snprintf(command, sizeof(command), "AT+TLSC=1,3,\"%s\"\r\n", IOTC_RNWF11_KEY_NAME);
+        if (!IOTC_RNWF11_Step("TLSC3-key", command)) return false;
+    }
     snprintf(command, sizeof(command), "AT+TLSC=1,5,\"%s\"\r\n", IOTC_MQTT_BROKER_HOST);
-    if (!IOTC_RNWF11_Command(command)) return false;
+    if (!IOTC_RNWF11_Step("TLSC5-servername", command)) return false;
+    IOTC_RNWF11_StepOptional("TLSC8-verify", "AT+TLSC=1,8,1\r\n");
+
+    /* These are rejected while the station is already associated, which is fine. */
+    snprintf(command, sizeof(command), "AT+WSTAC=1,\"%s\"\r\n", IOTC_WIFI_SSID);
+    IOTC_RNWF11_StepQuiet(command);
+    snprintf(command, sizeof(command), "AT+WSTAC=2,%u\r\n", IOTC_WIFI_SECURITY);
+    IOTC_RNWF11_StepQuiet(command);
+    snprintf(command, sizeof(command), "AT+WSTAC=3,\"%s\"\r\n", IOTC_WIFI_PASSWORD);
+    IOTC_RNWF11_StepQuiet(command);
+    IOTC_RNWF11_StepQuiet("AT+WSTAC=4,0\r\n");
+    IOTC_RNWF11_StepQuiet("AT+WSTA=1\r\n");
 
     snprintf(command, sizeof(command), "AT+MQTTC=1,\"%s\"\r\n", IOTC_MQTT_BROKER_HOST);
-    if (!IOTC_RNWF11_Command(command)) return false;
+    if (!IOTC_RNWF11_Step("MQTTC1-host", command)) return false;
     snprintf(command, sizeof(command), "AT+MQTTC=2,%u\r\n", IOTC_MQTT_BROKER_PORT);
-    if (!IOTC_RNWF11_Command(command)) return false;
+    if (!IOTC_RNWF11_Step("MQTTC2-port", command)) return false;
     snprintf(command, sizeof(command), "AT+MQTTC=3,\"%s\"\r\n", IOTC_MQTT_CLIENT_ID);
-    if (!IOTC_RNWF11_Command(command)) return false;
+    if (!IOTC_RNWF11_Step("MQTTC3-clientid", command)) return false;
+    /*
+     * Always written, even when empty: the module keeps the previous value
+     * across resets, and AWS rejects a CONNECT that carries a username.
+     */
     snprintf(command, sizeof(command), "AT+MQTTC=4,\"%s\"\r\n", IOTC_MQTT_USERNAME);
-    if (!IOTC_RNWF11_Command(command)) return false;
-    if (!IOTC_RNWF11_Command("AT+MQTTC=5,\"\"\r\n")) return false;
-    if (!IOTC_RNWF11_Command("AT+MQTTC=6,60\r\n")) return false;
-    if (!IOTC_RNWF11_Command("AT+MQTTC=7,1\r\n")) return false;
-    if (!IOTC_RNWF11_Command("AT+MQTTC=8,3\r\n")) return false;
-    return IOTC_RNWF11_Command("AT+MQTTCONN=1\r\n");
+    IOTC_RNWF11_StepOptional("MQTTC4-user", command);
+    IOTC_RNWF11_StepOptional("MQTTC5-pass", "AT+MQTTC=5,\"\"\r\n");
+    IOTC_RNWF11_StepOptional("MQTTC7-tls", "AT+MQTTC=7,1\r\n");
+    if (!IOTC_RNWF11_Step("MQTTC6-keepalive", "AT+MQTTC=6,60\r\n")) return false;
+    if (!IOTC_RNWF11_Step("MQTTCONN", "AT+MQTTCONN=1\r\n"))
+    {
+        return false;
+    }
+
+    /* The broker result arrives asynchronously; watch for it rather than guess. */
+    for (uint16_t slice = 0; slice < 10000U; slice++)
+    {
+        __delay_us(500);
+        IOTC_RNWF11_PollEvents();
+        if (mqttLinkUp)
+        {
+            break;
+        }
+    }
+    return true;
 }
 
-static void IOTC_RNWF11_PublishMotorState(void)
+static bool IOTC_RNWF11_PublishMotorState(void)
 {
     char command[384];
+#if IOTC_PUBLISH_TEST == 1
+    /* No quotes or braces, to tell an escaping fault from a dead connection. */
+    snprintf(command, sizeof(command), "AT+MQTTPUB=1,1,0,\"%s\",\"hello\"\r\n",
+             IOTC_MQTT_TELEMETRY_TOPIC);
+#elif IOTC_PUBLISH_TEST == 2
+    /* Escaped JSON but short, to tell escaping apart from command length. */
     snprintf(command, sizeof(command),
-             "AT+MQTTPUB=1,1,0,\"%s\",\"{\\\"motorRunning\\\":%u,\\\"state\\\":%u,\\\"sector\\\":%u,\\\"requestedSpeedRpm\\\":%u,\\\"measuredSpeedRpm\\\":%u,\\\"requestedCurrent\\\":%d,\\\"measuredCurrent\\\":%d,\\\"dutyCycle\\\":%d,\\\"dcBusAdc\\\":%d}\"\r\n",
+             "AT+MQTTPUB=1,1,0,\"%s\",\"{\\\"a\\\":1}\"\r\n",
+             IOTC_MQTT_TELEMETRY_TOPIC);
+#else
+    /* Keys are abbreviated: the full names overflow the module's AT line limit. */
+    snprintf(command, sizeof(command),
+             "AT+MQTTPUB=1,1,0,\"%s\",\"{\\\"run\\\":%u,\\\"st\\\":%u,\\\"sec\\\":%u,\\\"rpm\\\":%u,\\\"spd\\\":%u,\\\"ic\\\":%d,\\\"im\\\":%d,\\\"duty\\\":%d,\\\"vdc\\\":%d}\"\r\n",
              IOTC_MQTT_TELEMETRY_TOPIC, telemetry.motorRunning, telemetry.state,
              telemetry.sector, telemetry.requestedSpeedRpm, telemetry.measuredSpeedRpm,
              telemetry.requestedCurrent, telemetry.measuredCurrent, telemetry.dutyCycle,
              telemetry.dcBusAdc);
-    (void)IOTC_RNWF11_Command(command);
+#endif
+    return IOTC_RNWF11_Step("MQTTPUB", command);
 }
 
 void IOTC_RNWF11_Initialize(void)
 {
 #if IOTC_RNWF11_ENABLE
-    IOTC_RNWF11_UART1_Initialize();
+    IOTC_RNWF11_UART2_Initialize();
     iotcModulePresent = IOTC_RNWF11_CommandWithTimeout("AT\r\n", IOTC_RNWF11_PROBE_TIMEOUT);
     iotcConnected = false;
+
+#if !IOTC_RNWF11_RX_RPn
+    DEBUG_Printf("IOTC: UART2 pins unset, set IOTC_RNWF11_RX_RPn/TX_RPnR\r\n");
+#endif
+    DEBUG_Printf("IOTC: module %s, config %s\r\n",
+                 iotcModulePresent ? "detected" : "not responding",
+                 IOTC_RNWF11_IsConfigured() ? "ok" : "incomplete");
 #else
     iotcModulePresent = false;
     iotcConnected = false;
@@ -146,12 +284,58 @@ void IOTC_RNWF11_Tick1ms(void)
 {
 #if IOTC_RNWF11_ENABLE
     telemetryMilliseconds++;
+    retryMilliseconds++;
 #endif
 }
 
 void IOTC_RNWF11_SetTelemetry(const IOTC_RNWF11_Telemetry_t *sample)
 {
     telemetry = *sample;
+}
+
+/*
+ * The module reports real connection state asynchronously; command replies only
+ * say whether the command itself was accepted.
+ */
+static void IOTC_RNWF11_PollEvents(void)
+{
+    static char line[128];
+    static uint16_t len;
+
+    while (UART2_IsReceiveDataAvailable())
+    {
+        char c = (char)UART2_Read();
+        if ((c == '\r') || (c == '\n'))
+        {
+            if (len > 0U)
+            {
+                line[len] = '\0';
+                DEBUG_Printf("IOTC: event %s\r\n", line);
+                if (strstr(line, "+MQTTCONN:1") != NULL)
+                {
+                    mqttLinkUp = true;
+                }
+                else if (strstr(line, "+MQTTCONN:0") != NULL)
+                {
+                    mqttLinkUp = false;
+                }
+                else if (strstr(line, "+WSTAAIP:1") != NULL)
+                {
+                    netUp = true;
+                }
+                else if (strstr(line, "+WSTALU:0") != NULL)
+                {
+                    netUp = false;
+                    mqttLinkUp = false;
+                }
+                len = 0;
+            }
+        }
+        else if (len < (sizeof(line) - 1U))
+        {
+            line[len++] = c;
+        }
+    }
 }
 
 void IOTC_RNWF11_Task(void)
@@ -161,15 +345,42 @@ void IOTC_RNWF11_Task(void)
     {
         return;
     }
+    IOTC_RNWF11_PollEvents();
     if (!iotcConnected)
     {
+        if (!netUp)
+        {
+            return;
+        }
+        if (retryMilliseconds < IOTC_RETRY_PERIOD_MS)
+        {
+            return;
+        }
+        retryMilliseconds = 0;
         iotcConnected = IOTC_RNWF11_Configure();
+        DEBUG_Printf("IOTC: provisioning %s\r\n", iotcConnected ? "complete" : "failed");
+#if IOTC_DIAG_QUERIES
+        IOTC_RNWF11_Diagnose();
+#endif
+        /* MQTTCONN only means accepted; the broker link is reported later. */
+        mqttLinkUp = false;
+        telemetryMilliseconds = 0;
         return;
     }
     if (telemetryMilliseconds >= IOTC_TELEMETRY_PERIOD_MS)
     {
         telemetryMilliseconds = 0;
-        IOTC_RNWF11_PublishMotorState();
+        if (!mqttLinkUp)
+        {
+            DEBUG_Printf("IOTC: broker not connected, retrying\r\n");
+            iotcConnected = false;
+            retryMilliseconds = 0;
+            return;
+        }
+        bool sent = IOTC_RNWF11_PublishMotorState();
+        DEBUG_Printf("IOTC: publish %s state=%u rpm=%u duty=%d\r\n",
+                     sent ? "ok" : "FAILED",
+                     telemetry.state, telemetry.measuredSpeedRpm, telemetry.dutyCycle);
     }
 #endif
 }

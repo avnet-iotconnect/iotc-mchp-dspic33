@@ -55,6 +55,7 @@
 // *****************************************************************************
 #include <xc.h>
 #include "port_config.h"
+#include "iotconnect_rnwf11_config.h"
 
 #undef MCBOARD_UART
 // *****************************************************************************
@@ -234,6 +235,12 @@ void MapGPIOHWFunction(void)
         UART_TX : PIN #14 - ANN2/RP77/RD13(Output)   */
     _U1RXR = 78;
     _RP77R = 0b000001;
+
+    /** RNWF11 AT link on UART2, routed to the mikroBUS B header. */
+#if IOTC_RNWF11_RX_RPn
+    _U2RXR = IOTC_RNWF11_RX_RPn;
+    IOTC_RNWF11_TX_RPnR = IOTC_RNWF11_TX_RPnR_U2TX;
+#endif
 
     CN_Configure();
 }
