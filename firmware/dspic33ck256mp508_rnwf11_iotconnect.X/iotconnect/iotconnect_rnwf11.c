@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <xc.h>
 #include "clock.h"
 #include <libpic30.h> /* needs FCY from clock.h */
@@ -11,6 +12,9 @@
 #define IOTC_RNWF11_RESPONSE_SIZE 384U
 #define IOTC_RNWF11_COMMAND_TIMEOUT 5000000UL
 #define IOTC_RNWF11_PROBE_TIMEOUT 200000UL
+#define IOTC_RNWF11_TIME_WAIT_MS 15000UL
+#define IOTC_RNWF11_MIN_NTP_SECONDS 3000000000UL
+#define IOTC_RNWF11_WIFI_WAIT_MS 20000UL
 
 static bool iotcConnected;
 static bool iotcModulePresent;
@@ -147,6 +151,7 @@ static void IOTC_RNWF11_Query(const char *command)
 static void IOTC_RNWF11_Diagnose(void)
 {
     static const char *const queries[] = {
+        "AT+TIME\r\n",     /* confirm SNTP supplied a valid clock */
         "AT+TLSC=1\r\n",   /* did the certificate names actually stick */
         "AT+MQTTC\r\n",    /* host, port, client id, TLS selection */
     };
@@ -169,6 +174,44 @@ static void IOTC_RNWF11_StepQuiet(const char *command)
 static void IOTC_RNWF11_StepOptional(const char *label, const char *command)
 {
     (void)IOTC_RNWF11_Step(label, command);
+}
+
+static bool IOTC_RNWF11_WaitForValidTime(void)
+{
+    for (uint32_t elapsed = 0; elapsed < IOTC_RNWF11_TIME_WAIT_MS; elapsed++)
+    {
+        if (IOTC_RNWF11_Command("AT+TIME\r\n"))
+        {
+            char *time_value = strstr(lastResponse, "+TIME:");
+            if (time_value != NULL &&
+                strtoul(time_value + 6, NULL, 10) >= IOTC_RNWF11_MIN_NTP_SECONDS)
+            {
+                return true;
+            }
+        }
+        __delay_ms(1);
+    }
+    DEBUG_Printf("IOTC: step TIME-sync failed, resp=[%s]\r\n",
+                 (lastResponse[0] != '\0') ? lastResponse : "<timeout>");
+    return false;
+}
+
+static bool IOTC_RNWF11_WaitForNetwork(void)
+{
+    netUp = false;
+    IOTC_RNWF11_StepQuiet("AT+WSTA=1\r\n");
+
+    for (uint32_t elapsed = 0; elapsed < IOTC_RNWF11_WIFI_WAIT_MS; elapsed++)
+    {
+        IOTC_RNWF11_PollEvents();
+        if (netUp)
+        {
+            return true;
+        }
+        __delay_ms(1);
+    }
+    DEBUG_Printf("IOTC: step WiFi-IP failed\r\n");
+    return false;
 }
 
 static bool IOTC_RNWF11_Configure(void)
@@ -202,7 +245,13 @@ static bool IOTC_RNWF11_Configure(void)
     snprintf(command, sizeof(command), "AT+WSTAC=3,\"%s\"\r\n", IOTC_WIFI_PASSWORD);
     IOTC_RNWF11_StepQuiet(command);
     IOTC_RNWF11_StepQuiet("AT+WSTAC=4,0\r\n");
-    IOTC_RNWF11_StepQuiet("AT+WSTA=1\r\n");
+    if (!IOTC_RNWF11_WaitForNetwork()) return false;
+
+    /* AWS TLS certificate validation requires a valid module clock. */
+    if (!IOTC_RNWF11_Step("SNTPC-server", "AT+SNTPC=3,\"pool.ntp.org\"\r\n")) return false;
+    if (!IOTC_RNWF11_Step("SNTPC-enable", "AT+SNTPC=2,1\r\n")) return false;
+    if (!IOTC_RNWF11_Step("SNTPC-start", "AT+SNTPC=1\r\n")) return false;
+    if (!IOTC_RNWF11_WaitForValidTime()) return false;
 
     snprintf(command, sizeof(command), "AT+MQTTC=1,\"%s\"\r\n", IOTC_MQTT_BROKER_HOST);
     if (!IOTC_RNWF11_Step("MQTTC1-host", command)) return false;
@@ -210,6 +259,8 @@ static bool IOTC_RNWF11_Configure(void)
     if (!IOTC_RNWF11_Step("MQTTC2-port", command)) return false;
     snprintf(command, sizeof(command), "AT+MQTTC=3,\"%s\"\r\n", IOTC_MQTT_CLIENT_ID);
     if (!IOTC_RNWF11_Step("MQTTC3-clientid", command)) return false;
+    /* Match the working RNWF11 flow: use the MQTT protocol version it sets. */
+    if (!IOTC_RNWF11_Step("MQTTC8-protocol", "AT+MQTTC=8,3\r\n")) return false;
     /*
      * Always written, even when empty: the module keeps the previous value
      * across resets, and AWS rejects a CONNECT that carries a username.
@@ -217,7 +268,7 @@ static bool IOTC_RNWF11_Configure(void)
     snprintf(command, sizeof(command), "AT+MQTTC=4,\"%s\"\r\n", IOTC_MQTT_USERNAME);
     IOTC_RNWF11_StepOptional("MQTTC4-user", command);
     IOTC_RNWF11_StepOptional("MQTTC5-pass", "AT+MQTTC=5,\"\"\r\n");
-    IOTC_RNWF11_StepOptional("MQTTC7-tls", "AT+MQTTC=7,1\r\n");
+    if (!IOTC_RNWF11_Step("MQTTC7-tls", "AT+MQTTC=7,1\r\n")) return false;
     if (!IOTC_RNWF11_Step("MQTTC6-keepalive", "AT+MQTTC=6,60\r\n")) return false;
     if (!IOTC_RNWF11_Step("MQTTCONN", "AT+MQTTCONN=1\r\n"))
     {
@@ -234,7 +285,7 @@ static bool IOTC_RNWF11_Configure(void)
             break;
         }
     }
-    return true;
+    return mqttLinkUp;
 }
 
 static bool IOTC_RNWF11_PublishMotorState(void)
@@ -327,6 +378,11 @@ static void IOTC_RNWF11_PollEvents(void)
                 {
                     netUp = false;
                     mqttLinkUp = false;
+                }
+                else if (strstr(line, "20.2") != NULL)
+                {
+                    /* The module reports this when STA is already connected. */
+                    netUp = true;
                 }
                 len = 0;
             }
