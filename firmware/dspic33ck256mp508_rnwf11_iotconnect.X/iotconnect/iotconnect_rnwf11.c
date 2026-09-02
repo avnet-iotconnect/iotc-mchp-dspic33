@@ -26,6 +26,7 @@ static IOTC_RNWF11_Telemetry_t telemetry;
 static char lastResponse[IOTC_RNWF11_RESPONSE_SIZE];
 static bool lastOverrun;
 static bool mqttLinkUp;
+static volatile bool moduleTimeValid;
 /* Assume up: the module stays associated across dsPIC resets and only
  * re-announces its IP on a fresh association. */
 static bool netUp = true;
@@ -180,16 +181,14 @@ static void IOTC_RNWF11_StepOptional(const char *label, const char *command)
 
 static bool IOTC_RNWF11_WaitForValidTime(void)
 {
+    moduleTimeValid = false;
     for (uint32_t elapsed = 0; elapsed < IOTC_RNWF11_TIME_WAIT_MS; elapsed++)
     {
-        if (IOTC_RNWF11_Command("AT+TIME\r\n"))
+        (void)IOTC_RNWF11_Command("AT+TIME\r\n");
+        IOTC_RNWF11_PollEvents();
+        if (moduleTimeValid)
         {
-            char *time_value = strstr(lastResponse, "+TIME:");
-            if (time_value != NULL &&
-                strtoul(time_value + 6, NULL, 10) >= IOTC_RNWF11_MIN_NTP_SECONDS)
-            {
-                return true;
-            }
+            return true;
         }
         __delay_ms(1);
     }
@@ -250,9 +249,10 @@ static bool IOTC_RNWF11_Configure(void)
     if (!IOTC_RNWF11_WaitForNetwork()) return false;
 
     /* AWS TLS certificate validation requires a valid module clock. */
-    if (!IOTC_RNWF11_Step("SNTPC-server", "AT+SNTPC=3,\"pool.ntp.org\"\r\n")) return false;
-    if (!IOTC_RNWF11_Step("SNTPC-enable", "AT+SNTPC=2,1\r\n")) return false;
-    if (!IOTC_RNWF11_Step("SNTPC-start", "AT+SNTPC=1\r\n")) return false;
+    /* Existing SNTP configuration may reject updates with status 0.6. */
+    IOTC_RNWF11_StepQuiet("AT+SNTPC=3,\"pool.ntp.org\"\r\n");
+    IOTC_RNWF11_StepQuiet("AT+SNTPC=2,1\r\n");
+    IOTC_RNWF11_StepQuiet("AT+SNTPC=1\r\n");
     if (!IOTC_RNWF11_WaitForValidTime()) return false;
 
     snprintf(command, sizeof(command), "AT+MQTTC=1,\"%s\"\r\n", IOTC_MQTT_BROKER_HOST);
@@ -444,6 +444,14 @@ static void IOTC_RNWF11_PollEvents(void)
                 {
                     netUp = false;
                     mqttLinkUp = false;
+                }
+                else if (strstr(line, "+TIME:") != NULL)
+                {
+                    char *time_value = strstr(line, "+TIME:");
+                    if (strtoul(time_value + 6, NULL, 10) >= IOTC_RNWF11_MIN_NTP_SECONDS)
+                    {
+                        moduleTimeValid = true;
+                    }
                 }
                 else if (strstr(line, "20.2") != NULL)
                 {
