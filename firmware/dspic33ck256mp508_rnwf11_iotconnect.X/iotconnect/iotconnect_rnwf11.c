@@ -17,19 +17,15 @@
 #define IOTC_RNWF11_RESPONSE_SIZE 384U
 #define IOTC_RNWF11_COMMAND_TIMEOUT 5000000UL
 #define IOTC_RNWF11_PROBE_TIMEOUT 200000UL
-#define IOTC_RNWF11_TIME_WAIT_MS 15000UL
-#define IOTC_RNWF11_MIN_NTP_SECONDS 1600000000UL
 #define IOTC_RNWF11_WIFI_WAIT_MS 20000UL
 
 static bool iotcConnected;
 static bool iotcModulePresent;
 static volatile uint32_t telemetryMilliseconds;
 static volatile uint32_t retryMilliseconds;
-static IOTC_RNWF11_Telemetry_t telemetry;
 static char lastResponse[IOTC_RNWF11_RESPONSE_SIZE];
 static bool lastOverrun;
 static bool mqttLinkUp;
-static volatile bool moduleTimeValid;
 /* Assume up: the module stays associated across dsPIC resets and only
  * re-announces its IP on a fresh association. */
 static bool netUp = true;
@@ -189,27 +185,21 @@ static void IOTC_RNWF11_StepOptional(const char *label, const char *command)
     (void)IOTC_RNWF11_Step(label, command);
 }
 
-static bool IOTC_RNWF11_WaitForValidTime(void)
-{
-    moduleTimeValid = false;
-    for (uint32_t elapsed = 0; elapsed < IOTC_RNWF11_TIME_WAIT_MS; elapsed++)
-    {
-        (void)IOTC_RNWF11_Command("AT+TIME\r\n");
-        IOTC_RNWF11_PollEvents();
-        if (moduleTimeValid)
-        {
-            return true;
-        }
-        __delay_ms(1);
-    }
-    DEBUG_Printf("IOTC: step TIME-sync failed, resp=[%s]\r\n",
-                 (lastResponse[0] != '\0') ? lastResponse : "<timeout>");
-    return false;
-}
-
 static bool IOTC_RNWF11_WaitForNetwork(void)
 {
     netUp = false;
+    /* Close any MQTT session first - tearing down WiFi out from under a
+     * still-open MQTT session (below) leaves the module's own MQTT client
+     * state confused, which was seen to make every later AT+MQTTCONN=1
+     * fail instantly even after a fresh WiFi reassociation. Only the very
+     * first connect attempt after a full power cycle ever worked. */
+    IOTC_RNWF11_StepQuiet("AT+MQTTDISCONN\r\n");
+    /* Force a real disconnect+reconnect: AT+WSTA=1 alone is a no-op if the
+     * module is already associated from a prior boot (host resets/reflashes
+     * don't power-cycle the module), which was seen to reach MQTTCONN in a
+     * state that consistently fails - a genuinely fresh association is the
+     * one thing that correlated with MQTTCONN actually succeeding. */
+    IOTC_RNWF11_StepQuiet("AT+WSTA=0\r\n");
     IOTC_RNWF11_StepQuiet("AT+WSTA=1\r\n");
 
     for (uint32_t elapsed = 0; elapsed < IOTC_RNWF11_WIFI_WAIT_MS; elapsed++)
@@ -229,24 +219,11 @@ static bool IOTC_RNWF11_Configure(void)
 {
     char command[256];
 
-    /* Order follows RNWF11 Developer's Guide, Appendix A.6 (AWS via AT). */
+    /* Order matches the reference RNWF11 driver (main branch): WiFi is
+     * brought up completely first as its own phase, then TLS+MQTT are
+     * configured together right before connecting - not interleaved with
+     * TLS config first, the way this file did before. */
     if (!IOTC_RNWF11_Step("AT", "AT\r\n")) return false;
-
-    snprintf(command, sizeof(command), "AT+TLSC=1,1,\"%s\"\r\n", s_cfg.rnwf_ca_name);
-    if (!IOTC_RNWF11_Step("TLSC1-ca", command)) return false;
-    if (s_cfg.rnwf_cert_name[0] != '\0')
-    {
-        snprintf(command, sizeof(command), "AT+TLSC=1,2,\"%s\"\r\n", s_cfg.rnwf_cert_name);
-        if (!IOTC_RNWF11_Step("TLSC2-cert", command)) return false;
-    }
-    if (s_cfg.rnwf_key_name[0] != '\0')
-    {
-        snprintf(command, sizeof(command), "AT+TLSC=1,3,\"%s\"\r\n", s_cfg.rnwf_key_name);
-        if (!IOTC_RNWF11_Step("TLSC3-key", command)) return false;
-    }
-    snprintf(command, sizeof(command), "AT+TLSC=1,5,\"%s\"\r\n", s_cfg.mqtt_broker_host);
-    if (!IOTC_RNWF11_Step("TLSC5-servername", command)) return false;
-    IOTC_RNWF11_StepOptional("TLSC8-verify", "AT+TLSC=1,8,1\r\n");
 
     /* These are rejected while the station is already associated, which is fine. */
     snprintf(command, sizeof(command), "AT+WSTAC=1,\"%s\"\r\n", s_cfg.wifi_ssid);
@@ -258,12 +235,46 @@ static bool IOTC_RNWF11_Configure(void)
     IOTC_RNWF11_StepQuiet("AT+WSTAC=4,0\r\n");
     if (!IOTC_RNWF11_WaitForNetwork()) return false;
 
-    /* AWS TLS certificate validation requires a valid module clock. */
-    /* Existing SNTP configuration may reject updates with status 0.6. */
-    IOTC_RNWF11_StepQuiet("AT+SNTPC=3,\"pool.ntp.org\"\r\n");
-    IOTC_RNWF11_StepQuiet("AT+SNTPC=2,1\r\n");
-    IOTC_RNWF11_StepQuiet("AT+SNTPC=1\r\n");
-    if (!IOTC_RNWF11_WaitForValidTime()) return false;
+    /* These are rejected once the module already has the identical value
+     * persisted from an earlier provision_rnwf11_cert.py run (its own
+     * non-volatile storage, unaffected by power cycling the host board) -
+     * same "reject a no-op update" behavior already seen on WSTAC/SNTP, so
+     * treat rejection as fine rather than aborting the whole sequence. */
+    snprintf(command, sizeof(command), "AT+TLSC=1,1,\"%s\"\r\n", s_cfg.rnwf_ca_name);
+    IOTC_RNWF11_StepQuiet(command);
+    if (s_cfg.rnwf_cert_name[0] != '\0')
+    {
+        snprintf(command, sizeof(command), "AT+TLSC=1,2,\"%s\"\r\n", s_cfg.rnwf_cert_name);
+        IOTC_RNWF11_StepQuiet(command);
+    }
+    if (s_cfg.rnwf_key_name[0] != '\0')
+    {
+        snprintf(command, sizeof(command), "AT+TLSC=1,3,\"%s\"\r\n", s_cfg.rnwf_key_name);
+        IOTC_RNWF11_StepQuiet(command);
+    }
+    snprintf(command, sizeof(command), "AT+TLSC=1,5,\"%s\"\r\n", s_cfg.mqtt_broker_host);
+    IOTC_RNWF11_StepQuiet(command);
+    /* Field 8 is USE_ECC608 (use the module's secure-element key instead of
+     * the uploaded device-key file), not a generic "verify" toggle - the
+     * reference driver explicitly sends 0 here for the file-based cert path
+     * used by provision_rnwf11_cert.py. Sending 1 makes the module try to
+     * authenticate with its own secure-element identity instead of the
+     * uploaded key matching the cert actually registered with AWS IoT.
+     * TEMP DIAGNOSTIC: not resending this - it's already 0 in the module's
+     * persisted config from an earlier successful run, and re-sending the
+     * same value gets rejected with "0.6 Configuration Update Blocked"
+     * every boot, which may be leaving the TLS config slot in a state that
+     * breaks the MQTTCONN attempt right after it. */
+
+    /* The module's SNTP client never produces a real synced clock on this
+     * board (still investigating why), and the TLS stack validates AWS's
+     * server certificate against whatever clock it has - a wildly wrong
+     * one (module was seen free-running at ~year 2039/2096) makes a
+     * perfectly valid server cert look expired/not-yet-valid and the
+     * handshake gets rejected. AT+TIME=1,<unix> sets the clock directly,
+     * bypassing SNTP - approximate is fine, cert validity windows span
+     * years, not seconds. */
+    IOTC_RNWF11_StepQuiet("AT+TIME=1,1788998400\r\n");
 
     snprintf(command, sizeof(command), "AT+MQTTC=1,\"%s\"\r\n", s_cfg.mqtt_broker_host);
     if (!IOTC_RNWF11_Step("MQTTC1-host", command)) return false;
@@ -303,9 +314,7 @@ static bool IOTC_RNWF11_Configure(void)
 #define IOTC_RNWF11_ESCAPED_JSON_MAX 256U
 
 /* AT+MQTTPUB wraps the message in "..." with no escaping of its own - any
- * '"' inside the JSON payload prematurely closes that quoted argument. Keys
- * stay abbreviated (see IOTC_RNWF11_PublishMotorState) since iotc-c-lib's
- * "d"-envelope already adds back some of the line-length budget that saved. */
+ * '"' inside the JSON payload prematurely closes that quoted argument. */
 static bool IOTC_RNWF11_EscapeJsonForAtCommand(const char *json, char *out, size_t out_size)
 {
     size_t o = 0;
@@ -328,7 +337,7 @@ static bool IOTC_RNWF11_EscapeJsonForAtCommand(const char *json, char *out, size
     return true;
 }
 
-static bool IOTC_RNWF11_PublishMotorState(void)
+static bool IOTC_RNWF11_PublishTelemetry(void)
 {
     IotclMessageHandle msg = iotcl_telemetry_create();
     if (msg == NULL)
@@ -337,16 +346,9 @@ static bool IOTC_RNWF11_PublishMotorState(void)
         return false;
     }
 
-    /* Keys are abbreviated: the full names overflow the module's AT line limit. */
-    iotcl_telemetry_set_number(msg, "run", telemetry.motorRunning);
-    iotcl_telemetry_set_number(msg, "st", telemetry.state);
-    iotcl_telemetry_set_number(msg, "sec", telemetry.sector);
-    iotcl_telemetry_set_number(msg, "rpm", telemetry.requestedSpeedRpm);
-    iotcl_telemetry_set_number(msg, "spd", telemetry.measuredSpeedRpm);
-    iotcl_telemetry_set_number(msg, "ic", telemetry.requestedCurrent);
-    iotcl_telemetry_set_number(msg, "im", telemetry.measuredCurrent);
-    iotcl_telemetry_set_number(msg, "duty", telemetry.dutyCycle);
-    iotcl_telemetry_set_number(msg, "vdc", telemetry.dcBusAdc);
+    /* Simple dummy telemetry, matching the other iotc quickstarts in this
+     * family - no real sensor is read here. */
+    iotcl_telemetry_set_number(msg, "random", (double)(rand() % 101));
 
     char *json = iotcl_telemetry_create_serialized_string(msg, false);
     iotcl_telemetry_destroy(msg);
@@ -459,11 +461,6 @@ void IOTC_RNWF11_Tick1ms(void)
 #endif
 }
 
-void IOTC_RNWF11_SetTelemetry(const IOTC_RNWF11_Telemetry_t *sample)
-{
-    telemetry = *sample;
-}
-
 /*
  * The module reports real connection state asynchronously; command replies only
  * say whether the command itself was accepted.
@@ -490,22 +487,19 @@ static void IOTC_RNWF11_PollEvents(void)
                 {
                     mqttLinkUp = false;
                 }
-                else if (strstr(line, "+WSTAAIP:1") != NULL)
+                else if (strstr(line, "+WSTAAIP:") != NULL)
                 {
+                    /* The leading number is a per-association counter, not
+                     * a fixed interface id - it increments every time the
+                     * module reconnects (seen going 1 -> 3 after adding an
+                     * explicit AT+WSTA=0/1 disconnect+reconnect cycle), so
+                     * matching only ":1" missed every later reconnect. */
                     netUp = true;
                 }
                 else if (strstr(line, "+WSTALU:0") != NULL)
                 {
                     netUp = false;
                     mqttLinkUp = false;
-                }
-                else if (strstr(line, "+TIME:") != NULL)
-                {
-                    char *time_value = strstr(line, "+TIME:");
-                    if (strtoul(time_value + 6, NULL, 10) >= IOTC_RNWF11_MIN_NTP_SECONDS)
-                    {
-                        moduleTimeValid = true;
-                    }
                 }
                 else if (strstr(line, "20.2") != NULL)
                 {
@@ -541,13 +535,20 @@ void IOTC_RNWF11_Task(void)
             return;
         }
         retryMilliseconds = 0;
+        /* Clear any stale value from a prior session before this attempt -
+         * a genuine "+MQTTCONN:1" during Configure() below (processed via
+         * its own PollEvents() calls) sets this back to true; unconditionally
+         * clearing it AFTER Configure() returns (as this used to do) stomped
+         * on that real success every single time, making a connection that
+         * actually worked look immediately "not connected" on the very next
+         * check and forcing a pointless reconnect before telemetry ever had
+         * a chance to publish. */
+        mqttLinkUp = false;
         iotcConnected = IOTC_RNWF11_Configure();
         DEBUG_Printf("IOTC: provisioning %s\r\n", iotcConnected ? "complete" : "failed");
 #if IOTC_DIAG_QUERIES
         IOTC_RNWF11_Diagnose();
 #endif
-        /* MQTTCONN only means accepted; the broker link is reported later. */
-        mqttLinkUp = false;
         telemetryMilliseconds = 0;
         return;
     }
@@ -561,10 +562,8 @@ void IOTC_RNWF11_Task(void)
             retryMilliseconds = 0;
             return;
         }
-        bool sent = IOTC_RNWF11_PublishMotorState();
-        DEBUG_Printf("IOTC: publish %s state=%u rpm=%u duty=%d\r\n",
-                     sent ? "ok" : "FAILED",
-                     telemetry.state, telemetry.measuredSpeedRpm, telemetry.dutyCycle);
+        bool sent = IOTC_RNWF11_PublishTelemetry();
+        DEBUG_Printf("IOTC: publish %s\r\n", sent ? "ok" : "FAILED");
     }
 #endif
 }

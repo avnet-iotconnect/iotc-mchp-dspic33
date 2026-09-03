@@ -12,7 +12,8 @@ this repo is branched from. No RTOS, no MQTT/TLS stack on the MCU - the
 RNWF11 owns the WiFi/MQTT/TLS connection itself, using a certificate and key
 stored on its own filesystem, and the dsPIC33 just talks to it over UART
 with AT commands. While the motor control loop runs in real time, the demo
-publishes a motor-state telemetry reading to /IOTCONNECT every 10 seconds.
+publishes a simple random-number telemetry reading to /IOTCONNECT every 10
+seconds, matching the main branch's quickstart.
 
 <img src="media/mcsk-product.png" width="400"/>
 
@@ -94,27 +95,9 @@ main branch uses - see [tools/](tools/).
 
 ## 3. Import the Device Template
 
-<!-- TODO: this branch doesn't have its own device template yet. The main
-     branch's templates/dspic33-rnwf11-quickstart-template.json defines a
-     single "random" number field, which doesn't match this board's
-     telemetry - it publishes these fields instead (see
-     iotconnect/iotconnect_rnwf11.c's IOTC_RNWF11_PublishMotorState()):
-       run (motor running flag), st (state), sec (commutation sector),
-       rpm (requested speed), spd (measured speed), ic (requested current),
-       im (measured current), duty (PWM duty cycle), vdc (DC bus voltage)
-     Either build a new template in the /IOTCONNECT console with these as
-     the data point fields, then export/commit it as e.g.
-     templates/dspic33ck-mc-rnwf11-quickstart-template.json, or reuse the
-     existing template and just accept that these fields show up as
-     unmapped attributes. Once decided, update Step 5's template-select.png
-     reference too. -->
-
-> [!NOTE]
-> This branch doesn't have its own device template yet - the steps below
-> import the main branch's
-> [`templates/dspic33-rnwf11-quickstart-template.json`](templates/dspic33-rnwf11-quickstart-template.json)
-> as a starting point; its fields just won't match this board's telemetry
-> (see the comment in this section's source for what a proper one needs).
+This branch publishes the same single "random" number field as the main
+branch's quickstart, so its template applies here unchanged - import
+[`templates/dspic33-rnwf11-quickstart-template.json`](templates/dspic33-rnwf11-quickstart-template.json).
 
 1. Log in at [console.iotconnect.io](https://console.iotconnect.io).
 2. Open the **Device** module:
@@ -233,9 +216,8 @@ printed certificate into the IoTConnect console in the next step.
 
    <img src="media/select-entity.png" width="400"/>
 
-4. Select the template you imported earlier (see the note in
-   [Step 3](#3-import-the-device-template) - this screenshot is from the
-   main branch and needs updating once this board has its own template):
+4. Select the template you imported earlier in
+   [Step 3](#3-import-the-device-template):
 
    <img src="media/template-select.png" width="500"/>
 
@@ -341,23 +323,17 @@ move the micro-USB cable from the **PKOB4** port to the board's
 
 <img src="media/mcsk-connections-run.png" width="500"/>
 
-Once connected, the firmware publishes motor-state telemetry to
-/IOTCONNECT every 10 seconds:
+Once connected, the firmware publishes a simple random-number telemetry
+reading to /IOTCONNECT every 10 seconds, same as the main branch:
 
 ```json
-{"run": 0, "st": 0, "sec": 0, "rpm": 0, "spd": 0, "ic": 0, "im": 0, "duty": 0, "vdc": 0}
+{"random": 42}
 ```
-
-(`run`=motor running flag, `st`=state, `sec`=commutation sector,
-`rpm`=requested speed, `spd`=measured speed, `ic`=requested current,
-`im`=measured current, `duty`=PWM duty cycle, `vdc`=DC bus voltage.)
 
 Watch it arrive on the device's **Live Data** tab in the /IOTCONNECT console.
 
-<!-- TODO: screenshot of the Live Data tab showing this board's telemetry,
-     once a device template that maps these fields exists (see Step 3). -->
-**TODO: screenshot of the Live Data tab goes here** (once this board has its
-own device template, see Step 3).
+<!-- TODO: screenshot of the Live Data tab showing this board's telemetry. -->
+**TODO: screenshot of the Live Data tab goes here.**
 
 <!-- TODO: instructions for actually running the BLDC motor demo itself
      (motor/power hookup, any switches or buttons) - see the AN957 PDF. -->
