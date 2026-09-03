@@ -15,10 +15,13 @@
         <itemPath>../hal/board_service.h</itemPath>
         <itemPath>../hal/measure.h</itemPath>
         <itemPath>../hal/timer.h</itemPath>
+        <itemPath>../hal/nvm_flash.h</itemPath>
+        <itemPath>../hal/device_config.h</itemPath>
       </logicalFolder>
       <logicalFolder name="iotconnect" displayName="iotconnect" projectFiles="true">
         <itemPath>../iotconnect/iotconnect_rnwf11.h</itemPath>
         <itemPath>../iotconnect/iotconnect_rnwf11_config.h</itemPath>
+        <itemPath>../iotconnect/provisioning.h</itemPath>
       </logicalFolder>
       <logicalFolder name="library" displayName="library" projectFiles="true">
         <logicalFolder name="library-motor"
@@ -62,6 +65,7 @@
         <itemPath>../hal/board_service.c</itemPath>
         <itemPath>../hal/measure.c</itemPath>
         <itemPath>../hal/time_stub.c</itemPath>
+        <itemPath>../hal/nvm_flash.c</itemPath>
       </logicalFolder>
       <logicalFolder name="iotc-c-lib" displayName="iotc-c-lib" projectFiles="true">
         <itemPath>../Libraries/iotc-c-lib/core/src/iotcl.c</itemPath>
@@ -73,6 +77,7 @@
       </logicalFolder>
       <logicalFolder name="iotconnect" displayName="iotconnect" projectFiles="true">
         <itemPath>../iotconnect/iotconnect_rnwf11.c</itemPath>
+        <itemPath>../iotconnect/provisioning.c</itemPath>
       </logicalFolder>
       <itemPath>../bldc_main.c</itemPath>
       <itemPath>../trap.c</itemPath>
@@ -221,7 +226,7 @@
         <property key="linker-symbols" value=""/>
         <property key="map-file" value="${DISTDIR}/${PROJECTNAME}.${IMAGE_TYPE}.map"/>
         <property key="no-ivt" value="false"/>
-        <property key="oXC16ld-extra-opts" value=""/>
+        <property key="oXC16ld-extra-opts" value="-mreserve=prog@0x2B000:0x2B7FE"/>
         <property key="oXC16ld-fill-upper" value="0"/>
         <property key="oXC16ld-force-link" value="false"/>
         <property key="oXC16ld-no-smart-io" value="false"/>

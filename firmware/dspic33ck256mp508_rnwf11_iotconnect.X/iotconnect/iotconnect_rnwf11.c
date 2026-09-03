@@ -10,6 +10,9 @@
 #include "iotconnect_rnwf11_config.h"
 #include "iotcl.h"
 #include "iotcl_telemetry.h"
+#include "../hal/device_config.h"
+#include "../hal/nvm_flash.h"
+#include "provisioning.h"
 
 #define IOTC_RNWF11_RESPONSE_SIZE 384U
 #define IOTC_RNWF11_COMMAND_TIMEOUT 5000000UL
@@ -30,12 +33,19 @@ static bool mqttLinkUp;
  * re-announces its IP on a fresh association. */
 static bool netUp = true;
 
+/* Populated at boot from flash (see IOTC_RNWF11_Initialize()) if the
+ * device has been provisioned via tools/provision_device_config.py/.ps1,
+ * falling back to the compile-time IOTC_* defaults below otherwise - see
+ * device_config.h. Updated in place by IOTC_RNWF11_CheckProvisioning()
+ * whenever a new provisioning request comes in over the console. */
+static device_config_t s_cfg;
+
 static bool IOTC_RNWF11_IsConfigured(void)
 {
-    return (IOTC_WIFI_SSID[0] != '\0') &&
-           (IOTC_MQTT_BROKER_HOST[0] != '\0') &&
-           (IOTC_MQTT_CLIENT_ID[0] != '\0') &&
-           (IOTC_MQTT_TELEMETRY_TOPIC[0] != '\0');
+    return (s_cfg.wifi_ssid[0] != '\0') &&
+           (s_cfg.mqtt_broker_host[0] != '\0') &&
+           (s_cfg.mqtt_client_id[0] != '\0') &&
+           (s_cfg.mqtt_pub_topic[0] != '\0');
 }
 
 static void IOTC_RNWF11_UART2_Initialize(void)
@@ -223,28 +233,28 @@ static bool IOTC_RNWF11_Configure(void)
     /* Order follows RNWF11 Developer's Guide, Appendix A.6 (AWS via AT). */
     if (!IOTC_RNWF11_Step("AT", "AT\r\n")) return false;
 
-    snprintf(command, sizeof(command), "AT+TLSC=1,1,\"%s\"\r\n", IOTC_RNWF11_CA_NAME);
+    snprintf(command, sizeof(command), "AT+TLSC=1,1,\"%s\"\r\n", s_cfg.rnwf_ca_name);
     if (!IOTC_RNWF11_Step("TLSC1-ca", command)) return false;
-    if (IOTC_RNWF11_CERT_NAME[0] != '\0')
+    if (s_cfg.rnwf_cert_name[0] != '\0')
     {
-        snprintf(command, sizeof(command), "AT+TLSC=1,2,\"%s\"\r\n", IOTC_RNWF11_CERT_NAME);
+        snprintf(command, sizeof(command), "AT+TLSC=1,2,\"%s\"\r\n", s_cfg.rnwf_cert_name);
         if (!IOTC_RNWF11_Step("TLSC2-cert", command)) return false;
     }
-    if (IOTC_RNWF11_KEY_NAME[0] != '\0')
+    if (s_cfg.rnwf_key_name[0] != '\0')
     {
-        snprintf(command, sizeof(command), "AT+TLSC=1,3,\"%s\"\r\n", IOTC_RNWF11_KEY_NAME);
+        snprintf(command, sizeof(command), "AT+TLSC=1,3,\"%s\"\r\n", s_cfg.rnwf_key_name);
         if (!IOTC_RNWF11_Step("TLSC3-key", command)) return false;
     }
-    snprintf(command, sizeof(command), "AT+TLSC=1,5,\"%s\"\r\n", IOTC_MQTT_BROKER_HOST);
+    snprintf(command, sizeof(command), "AT+TLSC=1,5,\"%s\"\r\n", s_cfg.mqtt_broker_host);
     if (!IOTC_RNWF11_Step("TLSC5-servername", command)) return false;
     IOTC_RNWF11_StepOptional("TLSC8-verify", "AT+TLSC=1,8,1\r\n");
 
     /* These are rejected while the station is already associated, which is fine. */
-    snprintf(command, sizeof(command), "AT+WSTAC=1,\"%s\"\r\n", IOTC_WIFI_SSID);
+    snprintf(command, sizeof(command), "AT+WSTAC=1,\"%s\"\r\n", s_cfg.wifi_ssid);
     IOTC_RNWF11_StepQuiet(command);
     snprintf(command, sizeof(command), "AT+WSTAC=2,%u\r\n", IOTC_WIFI_SECURITY);
     IOTC_RNWF11_StepQuiet(command);
-    snprintf(command, sizeof(command), "AT+WSTAC=3,\"%s\"\r\n", IOTC_WIFI_PASSWORD);
+    snprintf(command, sizeof(command), "AT+WSTAC=3,\"%s\"\r\n", s_cfg.wifi_password);
     IOTC_RNWF11_StepQuiet(command);
     IOTC_RNWF11_StepQuiet("AT+WSTAC=4,0\r\n");
     if (!IOTC_RNWF11_WaitForNetwork()) return false;
@@ -255,11 +265,11 @@ static bool IOTC_RNWF11_Configure(void)
     if (!IOTC_RNWF11_Step("SNTPC-start", "AT+SNTPC=1\r\n")) return false;
     if (!IOTC_RNWF11_WaitForValidTime()) return false;
 
-    snprintf(command, sizeof(command), "AT+MQTTC=1,\"%s\"\r\n", IOTC_MQTT_BROKER_HOST);
+    snprintf(command, sizeof(command), "AT+MQTTC=1,\"%s\"\r\n", s_cfg.mqtt_broker_host);
     if (!IOTC_RNWF11_Step("MQTTC1-host", command)) return false;
-    snprintf(command, sizeof(command), "AT+MQTTC=2,%u\r\n", IOTC_MQTT_BROKER_PORT);
+    snprintf(command, sizeof(command), "AT+MQTTC=2,%u\r\n", s_cfg.mqtt_broker_port);
     if (!IOTC_RNWF11_Step("MQTTC2-port", command)) return false;
-    snprintf(command, sizeof(command), "AT+MQTTC=3,\"%s\"\r\n", IOTC_MQTT_CLIENT_ID);
+    snprintf(command, sizeof(command), "AT+MQTTC=3,\"%s\"\r\n", s_cfg.mqtt_client_id);
     if (!IOTC_RNWF11_Step("MQTTC3-clientid", command)) return false;
     /* Match the working RNWF11 flow: use the MQTT protocol version it sets. */
     if (!IOTC_RNWF11_Step("MQTTC8-protocol", "AT+MQTTC=8,3\r\n")) return false;
@@ -267,7 +277,7 @@ static bool IOTC_RNWF11_Configure(void)
      * Always written, even when empty: the module keeps the previous value
      * across resets, and AWS rejects a CONNECT that carries a username.
      */
-    snprintf(command, sizeof(command), "AT+MQTTC=4,\"%s\"\r\n", IOTC_MQTT_USERNAME);
+    snprintf(command, sizeof(command), "AT+MQTTC=4,\"%s\"\r\n", s_cfg.mqtt_username);
     IOTC_RNWF11_StepOptional("MQTTC4-user", command);
     IOTC_RNWF11_StepOptional("MQTTC5-pass", "AT+MQTTC=5,\"\"\r\n");
     if (!IOTC_RNWF11_Step("MQTTC7-tls", "AT+MQTTC=7,1\r\n")) return false;
@@ -358,7 +368,7 @@ static bool IOTC_RNWF11_PublishMotorState(void)
     {
         char command[384];
         int written = snprintf(command, sizeof(command), "AT+MQTTPUB=1,1,0,\"%s\",\"%s\"\r\n",
-                                IOTC_MQTT_TELEMETRY_TOPIC, escaped);
+                                s_cfg.mqtt_pub_topic, escaped);
         if ((written < 0) || ((size_t)written >= sizeof(command)))
         {
             DEBUG_Printf("IOTC: telemetry command too long to send\r\n");
@@ -380,6 +390,32 @@ void IOTC_RNWF11_Initialize(void)
     iotcModulePresent = IOTC_RNWF11_CommandWithTimeout("AT\r\n", IOTC_RNWF11_PROBE_TIMEOUT);
     iotcConnected = false;
 
+    if (DEVICE_CONFIG_Load(&s_cfg))
+    {
+        DEBUG_Printf("IOTC: loaded provisioned config for client %s\r\n", s_cfg.mqtt_client_id);
+    }
+    else
+    {
+        // Not yet provisioned (or flash was blank/corrupt) - fall back to
+        // the compile-time defaults so the board still works exactly as
+        // before without going through tools/provision_device_config.py/.ps1.
+        // Also the one safe moment to self-test the flash driver: this
+        // page holds no valid config yet, so there is nothing to lose.
+        snprintf(s_cfg.wifi_ssid, sizeof(s_cfg.wifi_ssid), "%s", IOTC_WIFI_SSID);
+        snprintf(s_cfg.wifi_password, sizeof(s_cfg.wifi_password), "%s", IOTC_WIFI_PASSWORD);
+        snprintf(s_cfg.mqtt_broker_host, sizeof(s_cfg.mqtt_broker_host), "%s", IOTC_MQTT_BROKER_HOST);
+        s_cfg.mqtt_broker_port = IOTC_MQTT_BROKER_PORT;
+        snprintf(s_cfg.mqtt_client_id, sizeof(s_cfg.mqtt_client_id), "%s", IOTC_MQTT_CLIENT_ID);
+        snprintf(s_cfg.mqtt_username, sizeof(s_cfg.mqtt_username), "%s", IOTC_MQTT_USERNAME);
+        snprintf(s_cfg.mqtt_pub_topic, sizeof(s_cfg.mqtt_pub_topic), "%s", IOTC_MQTT_TELEMETRY_TOPIC);
+        snprintf(s_cfg.rnwf_ca_name, sizeof(s_cfg.rnwf_ca_name), "%s", IOTC_RNWF11_CA_NAME);
+        snprintf(s_cfg.rnwf_cert_name, sizeof(s_cfg.rnwf_cert_name), "%s", IOTC_RNWF11_CERT_NAME);
+        snprintf(s_cfg.rnwf_key_name, sizeof(s_cfg.rnwf_key_name), "%s", IOTC_RNWF11_KEY_NAME);
+
+        DEBUG_Printf("IOTC: not provisioned, using compile-time config; flash self-test %s\r\n",
+                     NVM_FLASH_SelfTest() ? "PASS" : "FAIL");
+    }
+
     IotclClientConfig iotcl_cfg;
     iotcl_init_client_config(&iotcl_cfg);
     iotcl_cfg.device.instance_type = IOTCL_DCT_CUSTOM; // broker/topic are resolved at provisioning time - see iotconnect_rnwf11_config.h
@@ -394,6 +430,24 @@ void IOTC_RNWF11_Initialize(void)
 #else
     iotcModulePresent = false;
     iotcConnected = false;
+#endif
+}
+
+void IOTC_RNWF11_CheckProvisioning(void)
+{
+#if IOTC_RNWF11_ENABLE
+    if (PROVISIONING_CheckForRequest())
+    {
+        device_config_t new_cfg;
+        if (PROVISIONING_RunOnce(&new_cfg))
+        {
+            s_cfg = new_cfg;
+            iotcConnected = false;              // force a fresh connect with the new config
+            mqttLinkUp = false;
+            retryMilliseconds = IOTC_RETRY_PERIOD_MS; // don't wait out the retry timer
+            DEBUG_Printf("IOTC: reprovisioned, reconnecting\r\n");
+        }
+    }
 #endif
 }
 

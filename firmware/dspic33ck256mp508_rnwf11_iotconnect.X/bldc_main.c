@@ -119,6 +119,7 @@ int main(void)
             mcappData.changeDirection = 1;
         }            
         IOTC_RNWF11_SetTelemetry(&telemetry);
+        IOTC_RNWF11_CheckProvisioning();
         IOTC_RNWF11_Task();
     }
 }
