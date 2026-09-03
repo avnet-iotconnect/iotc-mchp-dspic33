@@ -85,7 +85,7 @@ int main(void)
     HAL_MC1HallStateChangeTimerStart();
     LED1 = 1;
     IOTC_RNWF11_Initialize();
-        
+
 	while(1)
 	{
         IOTC_RNWF11_Telemetry_t telemetry = {
@@ -117,7 +117,7 @@ int main(void)
         if(HAL_IsPressed_Button2() && mcappData.changeDirection == 0)
         {
             mcappData.changeDirection = 1;
-        }            
+        }
         IOTC_RNWF11_SetTelemetry(&telemetry);
         IOTC_RNWF11_CheckProvisioning();
         IOTC_RNWF11_Task();

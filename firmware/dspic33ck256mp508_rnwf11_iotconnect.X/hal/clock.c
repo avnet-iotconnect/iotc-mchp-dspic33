@@ -59,6 +59,41 @@
 
 // *****************************************************************************
 // *****************************************************************************
+// Section: Configuration Bits
+// *****************************************************************************
+// *****************************************************************************
+/* This project never set any config fuse words (no #pragma config anywhere,
+ * confirmed absent from the built .elf's sections) - they were left at the
+ * chip's erased/default state. InitOscillator() below does a manual runtime
+ * clock switch from FRC to FRCPLL, which requires FCKSM to have clock
+ * switching enabled; if the erased-default FCKSM value disables switching,
+ * OSWEN never clears and InitOscillator() hangs forever, before main() ever
+ * reaches DEBUG_Initialize() or LED1 = 1. FICD_ICS is set explicitly too,
+ * since an erased-default debug channel selection not matching PKOB4's
+ * PGC1/PGD1 wiring on this board would explain the intermittent
+ * "not ready for debugging" errors seen while programming/debugging. */
+#pragma config BWRP = OFF
+#pragma config BSS = DISABLED
+#pragma config BSEN = OFF
+#pragma config GWRP = OFF
+#pragma config GSS = DISABLED
+#pragma config CWRP = OFF
+#pragma config CSS = DISABLED
+#pragma config AIVTDIS = OFF
+
+#pragma config FNOSC = FRC
+#pragma config IESO = OFF
+#pragma config POSCMD = NONE
+#pragma config FCKSM = CSECME
+
+#pragma config FWDTEN = ON_SW
+#pragma config WINDIS = OFF
+
+#pragma config ICS = PGD1
+#pragma config JTAGEN = OFF
+
+// *****************************************************************************
+// *****************************************************************************
 // Section: Functions
 // *****************************************************************************
 // *****************************************************************************
