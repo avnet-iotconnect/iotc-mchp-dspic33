@@ -62,8 +62,8 @@ before you can put it into the firmware and build.
 ### Software
 
 1. [MPLAB X IDE](https://www.microchip.com/mplabx) 6.25 or later, with the **XC-DSC** compiler (4.00 or later) and the `dsPIC33CK-MP_DFP` device pack - **required for everyone**, not just for modifying the firmware (see the important note above)
-2. `openssl` on your `PATH` (already present on most Linux/macOS systems; on Windows it's included with [Git for Windows](https://git-scm.com/downloads/win), among other sources)
-3. Either Python 3.9+ **or** PowerShell 5.1+ (Windows ships this by default; PowerShell 7+ also works on Linux/macOS) to run the provisioning scripts - pick whichever you're more comfortable with, both do the same thing
+2. `openssl` on your `PATH` (already present on most Linux systems; on Windows it's included with [Git for Windows](https://git-scm.com/downloads/win), among other sources)
+3. Either Python 3.9+ **or** PowerShell 5.1+ (Windows ships this by default; PowerShell 7+ also works on Linux) to run the provisioning scripts - pick whichever you're more comfortable with, both do the same thing
 4. A serial terminal (PuTTY, Tera Term, MPLAB Data Visualizer's terminal, etc.) to watch the device's console output
 5. An [/IOTCONNECT](https://www.iotconnect.io/) account
 
@@ -137,7 +137,6 @@ enumerated as - **the full path/name, not just the last part** (e.g.
 - **Linux**: run `ls /dev/serial/by-id/` (or `dmesg | tail` right after
   plugging it in) - look for the RNWF11's MCP2200 USB-to-UART bridge, e.g.
   `/dev/ttyACM0`.
-- **macOS**: run `ls /dev/cu.*` - look for something like `/dev/cu.usbmodemXXXX`.
 - **Windows**: open Device Manager &rarr; **Ports (COM & LPT)** - look for
   "MCP2200 USB Serial Port Emulator" and note its `COMx` number (e.g. `COM6`).
 
@@ -158,7 +157,7 @@ whatever you pick later, both when creating the device in IoTConnect and
 when resolving connection info. From the `iotc-mchp-dspic33` directory you
 cloned:
 
-**Linux/macOS:**
+**Linux:**
 ```bash
 cd tools
 ```
@@ -260,7 +259,7 @@ open port" failure that follows. Replace `MYCPID`/`MYENVIRONMENT` with the
 values under **Settings &rarr; Key Vault** in the IoTConnect console, and
 `MYUNIQUEID` with the same Unique ID you used in Steps 4 and 5:
 
-**Linux/macOS:**
+**Linux:**
 ```bash
 cd tools
 ```
