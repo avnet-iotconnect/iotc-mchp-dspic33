@@ -52,15 +52,12 @@ before you can put it into the firmware and build.
 
 ### Hardware
 
-1. dsPIC33CK Motor Control Starter Kit **(TODO: correct product/purchase link - placeholder below is not real)**
-   [placeholder link](https://www.microchip.com/en-us/development-tool/)
-
-   **TODO: photo of the starter kit board goes here.**
+1. [dsPIC33CK Motor Control Starter Kit](https://www.microchip.com/en-us/development-tool/EV12F76A)
 
 2. [RNWF11 UART to Cloud Add-on Board (EV12H55A)](https://www.microchip.com/en-us/development-tool/ev12h55a)
-3. Two USB cables: one for the starter kit's onboard debugger/console, one for the RNWF11's own USB-C port (used only during provisioning)
-4. A 2.4 GHz WiFi network and its credentials
-5. **TODO:** any motor/power hardware needed to run the BLDC demo itself (motor, power supply, etc.) - see the AN957 PDF
+3. 1 micro-USB cable
+4. 1 USB-C cable
+5. A 2.4 GHz WiFi network
 
 ### Software
 
@@ -164,18 +161,26 @@ cloned:
 **Linux/macOS:**
 ```bash
 cd tools
+```
+```bash
 curl -fsSLO https://www.amazontrust.com/repository/AmazonRootCA1.pem
 python3 provision_rnwf11_cert.py --port MYPORTNAME --duid MYUNIQUEID \
     --ca-cert-path AmazonRootCA1.pem
+```
+```bash
 cd ..
 ```
 
 **Windows (PowerShell):**
 ```powershell
 Set-Location tools
+```
+```powershell
 Invoke-WebRequest https://www.amazontrust.com/repository/AmazonRootCA1.pem -OutFile AmazonRootCA1.pem
 .\provision_rnwf11_cert.ps1 -Port MYPORTNAME -Duid MYUNIQUEID `
     -CaCertPath AmazonRootCA1.pem
+```
+```powershell
 Set-Location ..
 ```
 
@@ -258,16 +263,24 @@ values under **Settings &rarr; Key Vault** in the IoTConnect console, and
 **Linux/macOS:**
 ```bash
 cd tools
+```
+```bash
 python3 provision_device_config.py --port none --wifi-ssid x --wifi-password x \
     --cpid MYCPID --env MYENVIRONMENT --duid MYUNIQUEID
+```
+```bash
 cd ..
 ```
 
 **Windows (PowerShell):**
 ```powershell
 Set-Location tools
+```
+```powershell
 .\provision_device_config.ps1 -Port none -WifiSsid x -WifiPassword x `
     -Cpid MYCPID -Env MYENVIRONMENT -Duid MYUNIQUEID
+```
+```powershell
 Set-Location ..
 ```
 
@@ -332,14 +345,6 @@ reading to /IOTCONNECT every 10 seconds, same as the main branch:
 
 Watch it arrive on the device's **Live Data** tab in the /IOTCONNECT console.
 
-<!-- TODO: screenshot of the Live Data tab showing this board's telemetry. -->
-**TODO: screenshot of the Live Data tab goes here.**
-
-<!-- TODO: instructions for actually running the BLDC motor demo itself
-     (motor/power hookup, any switches or buttons) - see the AN957 PDF. -->
-**TODO: instructions for actually running the BLDC motor demo itself**
-(motor/power hookup, any switches or buttons - see the AN957 PDF) go here.
-
 ## 10. Resources
 
 - [AN957 Demo ReadMe MCSK.pdf](firmware/dspic33ck256mp508_rnwf11_iotconnect.X/docs) - Microchip's motor-control reference application this quickstart is built on
@@ -347,17 +352,3 @@ Watch it arrive on the device's **Live Data** tab in the /IOTCONNECT console.
 - [RNWF11 UART to Cloud Add-on Board User's Guide](https://ww1.microchip.com/downloads/aemDocuments/documents/WSG/ProductDocuments/UserGuides/RNWF11-UART-to-Cloud-Add-on-Board-User-Guide-DS50003638.pdf)
 - [RNWF11 Application Developer's Guide](https://onlinedocs.microchip.com/oxy/GUID-209426F5-2F78-4B3F-80A0-AD79A119381E) (AT command reference)
 - [iotc-c-lib](https://github.com/avnet-iotconnect/iotc-c-lib) - /IOTCONNECT's C SDK
-
-### Why is this different from the main branch?
-
-The main branch stores WiFi/IoTConnect config in a reserved flash page,
-written at runtime over serial by a provisioning script - so one prebuilt
-`.hex` works for anyone, and reconfiguring never needs a recompile. That
-depends on a flash driver written for the dsPIC33AK's flash controller,
-which doesn't carry over to this dsPIC33CK-family board's more traditional
-flash peripheral, and this board's UART budget is already tighter (shared
-with the real-time motor-control loop) than the main board's. Building that
-same runtime-provisioning support here is possible but nontrivial - see the
-main branch's `bsp/nvm_flash.c` and `app/provisioning.c` for what it would
-involve porting. Until/unless someone does that work, this board uses
-compile-time configuration instead.
