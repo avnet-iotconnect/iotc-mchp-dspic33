@@ -17,18 +17,6 @@ seconds, matching the main branch's quickstart.
 
 <img src="media/mcsk-product.png" width="400"/>
 
-> [!IMPORTANT]
-> **This branch works differently than the main dsPIC33AK512MPS512 quickstart
-> in one important way: there's no pre-built firmware image, and no runtime
-> WiFi/IoTConnect provisioning over serial.** WiFi credentials and IoTConnect
-> connection details are compiled into the firmware as `#define`s, so
-> **building from source with MPLAB X is required for everyone** running
-> this quickstart, not just people modifying the firmware, and reconfiguring
-> for a new WiFi network or a new device means editing a header and
-> rebuilding, not re-running a script. See [Why is this different from the
-> main branch?](#why-is-this-different-from-the-main-branch) below if you're
-> wondering why.
-
 ## Table of Contents
 
 1. [Prerequisites](#1-prerequisites)
