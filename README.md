@@ -150,18 +150,18 @@ own filesystem as the main branch (`root-ca` / `device-cert` / `device-key`,
 set in `iotconnect/iotconnect_rnwf11_config.h`), so the `--ca-name`/
 `--cert-name`/`--key-name` flags can stay at their defaults.
 
-Then, in the command below, replace `MYPORTNAME` with the port you just
-found, and `MYUNIQUEID` with a Unique ID of your own choosing for this
-device - pick something memorable, e.g. `my-desk-dspic33ck`. You'll reuse
-whatever you pick later, both when creating the device in IoTConnect and
-when resolving connection info. From the `iotc-mchp-dspic33` directory you
-cloned:
+From the `iotc-mchp-dspic33` directory you cloned:
 
 **Linux:**
 ```bash
 cd tools
 curl -fsSLO https://www.amazontrust.com/repository/AmazonRootCA1.pem
 ```
+
+Replace `MYPORTNAME` with the port you found above, and `MYUNIQUEID` with a
+Unique ID of your own choosing for this device - pick something memorable,
+e.g. `my-desk-dspic33ck`. You'll reuse whatever you pick later, both when
+creating the device in IoTConnect and when resolving connection info.
 ```bash
 python3 provision_rnwf11_cert.py --port MYPORTNAME --duid MYUNIQUEID --ca-cert-path AmazonRootCA1.pem
 ```
@@ -174,18 +174,17 @@ cd ..
 Set-Location tools
 Invoke-WebRequest https://www.amazontrust.com/repository/AmazonRootCA1.pem -OutFile AmazonRootCA1.pem
 ```
+
+Replace `MYPORTNAME` with the port you found above, and `MYUNIQUEID` with a
+Unique ID of your own choosing for this device - pick something memorable,
+e.g. `my-desk-dspic33ck`. You'll reuse whatever you pick later, both when
+creating the device in IoTConnect and when resolving connection info.
 ```powershell
 .\provision_rnwf11_cert.ps1 -Port MYPORTNAME -Duid MYUNIQUEID -CaCertPath AmazonRootCA1.pem
 ```
 ```powershell
 Set-Location ..
 ```
-
-> [!NOTE]
-> If you've changed `IOTC_RNWF11_CA_NAME`/`IOTC_RNWF11_CERT_NAME`/
-> `IOTC_RNWF11_KEY_NAME` in `iotconnect/iotconnect_rnwf11_config.h` from
-> their defaults, pass matching `--ca-name`/`--cert-name`/`--key-name`
-> flags here too.
 
 This generates a self-signed device certificate, prints it to the terminal,
 and uploads the CA cert, device cert, and device key to the RNWF11's own
@@ -253,14 +252,16 @@ get compiled in. This step just resolves what those values need to be.
 broker host, client ID, username, and telemetry topic *before* it tries to
 open a serial connection - so you can run it with a placeholder `--port`
 (or `-Port`) purely to get those printed values, then ignore the "could not
-open port" failure that follows. Replace `MYCPID`/`MYENVIRONMENT` with the
-values under **Settings &rarr; Key Vault** in the IoTConnect console, and
-`MYUNIQUEID` with the same Unique ID you used in Steps 4 and 5:
+open port" failure that follows.
 
 **Linux:**
 ```bash
 cd tools
 ```
+
+Replace `MYCPID`/`MYENVIRONMENT` with the values under **Settings &rarr; Key
+Vault** in the IoTConnect console, and `MYUNIQUEID` with the same Unique ID
+you used in Steps 4 and 5:
 ```bash
 python3 provision_device_config.py --port none --wifi-ssid x --wifi-password x --cpid MYCPID --env MYENVIRONMENT --duid MYUNIQUEID
 ```
@@ -272,6 +273,10 @@ cd ..
 ```powershell
 Set-Location tools
 ```
+
+Replace `MYCPID`/`MYENVIRONMENT` with the values under **Settings &rarr; Key
+Vault** in the IoTConnect console, and `MYUNIQUEID` with the same Unique ID
+you used in Steps 4 and 5:
 ```powershell
 .\provision_device_config.ps1 -Port none -WifiSsid x -WifiPassword x -Cpid MYCPID -Env MYENVIRONMENT -Duid MYUNIQUEID
 ```
@@ -299,20 +304,11 @@ and fill in:
   for an AWS-backed account, which authenticates by certificate instead)
 - `IOTC_MQTT_TELEMETRY_TOPIC` - the **Resolved telemetry topic** value
 
-Leave `IOTC_RNWF11_CA_NAME` / `IOTC_RNWF11_CERT_NAME` / `IOTC_RNWF11_KEY_NAME`
-at their defaults (`root-ca` / `device-cert` / `device-key`) unless you
-passed different names in Step 4.
-
 Then, in MPLAB X:
 
 1. Open [`firmware/dspic33ck256mp508_rnwf11_iotconnect.X/bldc.X`](firmware/dspic33ck256mp508_rnwf11_iotconnect.X/bldc.X).
 2. Clean and Build. The output `.hex` lands in
    `bldc.X/dist/default/production/`.
-
-> [!NOTE]
-> **Every new WiFi network or every new device means repeating this step** -
-> edit the header, rebuild, reflash. There's no way around the recompile on
-> this board; see [Why is this different from the main branch?](#why-is-this-different-from-the-main-branch).
 
 ## 9. Flash and Run the Demo
 
@@ -325,11 +321,12 @@ from Step 6.
 Program the board via the onboard debugger (**Make and Program Device** in
 MPLAB X).
 
-To watch the boot log, open a serial terminal at 115200 8-N-1 - but first
-move the micro-USB cable from the **PKOB4** port to the board's
-**USB-UART** port instead (the debug console isn't available over PKOB4):
+To watch the boot log, open a serial terminal at 115200 8-N-1.
 
-<img src="media/mcsk-connections-run.png" width="500"/>
+> [!NOTE]
+> The micro-USB connection can stay on the PKOB4 port on the board for connecting to the 
+> serial console. The firmware routes the serial communications through this port to 
+> prevent users from needing to swap their USB connection between ports on the board.
 
 Once connected, the firmware publishes a simple random-number telemetry
 reading to /IOTCONNECT every 10 seconds, same as the main branch:
