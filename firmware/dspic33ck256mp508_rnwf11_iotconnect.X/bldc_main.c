@@ -88,6 +88,17 @@ int main(void)
 
 	while(1)
 	{
+    IOTC_RNWF11_Telemetry_t telemetry = {
+        .motorRunning = mcappData.runMotor,
+        .state = mcappData.state,
+        .sector = mcappData.sector,
+        .requestedSpeedRpm = mcappData.desiredSpeed,
+        .measuredSpeedRpm = mcappData.calculateSpeed.speedValue,
+        .requestedCurrent = mcappData.desiredCurrent,
+        .measuredCurrent = mcappData.measuredCurrent,
+        .dutyCycle = mcappData.dutyCycle,
+        .dcBusAdc = mcappData.analogInputs.measureVdc.value
+    };
         HAL_BoardService();
 
         if(HAL_IsPressed_Button1())
@@ -107,6 +118,7 @@ int main(void)
         {
             mcappData.changeDirection = 1;
         }
+        IOTC_RNWF11_SetTelemetry(&telemetry);
         IOTC_RNWF11_CheckProvisioning();
         IOTC_RNWF11_Task();
     }

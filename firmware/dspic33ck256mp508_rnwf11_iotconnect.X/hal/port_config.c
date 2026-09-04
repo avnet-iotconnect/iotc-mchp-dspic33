@@ -240,6 +240,8 @@ void MapGPIOHWFunction(void)
 
     /** RNWF11 AT link on UART2, routed to the mikroBUS B header. */
 #if IOTC_RNWF11_RX_RPn
+  TRISDbits.TRISD5 = 0;
+  TRISDbits.TRISD6 = 1;
     _U2RXR = IOTC_RNWF11_RX_RPn;
     IOTC_RNWF11_TX_RPnR = IOTC_RNWF11_TX_RPnR_U2TX;
 #endif

@@ -62,16 +62,7 @@
 // Section: Configuration Bits
 // *****************************************************************************
 // *****************************************************************************
-/* This project never set any config fuse words (no #pragma config anywhere,
- * confirmed absent from the built .elf's sections) - they were left at the
- * chip's erased/default state. InitOscillator() below does a manual runtime
- * clock switch from FRC to FRCPLL, which requires FCKSM to have clock
- * switching enabled; if the erased-default FCKSM value disables switching,
- * OSWEN never clears and InitOscillator() hangs forever, before main() ever
- * reaches DEBUG_Initialize() or LED1 = 1. FICD_ICS is set explicitly too,
- * since an erased-default debug channel selection not matching PKOB4's
- * PGC1/PGD1 wiring on this board would explain the intermittent
- * "not ready for debugging" errors seen while programming/debugging. */
+/* Keep the device configuration identical to the known-good console build. */
 #pragma config BWRP = OFF
 #pragma config BSS = DISABLED
 #pragma config BSEN = OFF
@@ -81,16 +72,48 @@
 #pragma config CSS = DISABLED
 #pragma config AIVTDIS = OFF
 
+#pragma config BSLIM = 0x1FFF
+
 #pragma config FNOSC = FRC
 #pragma config IESO = OFF
 #pragma config POSCMD = NONE
-#pragma config FCKSM = CSECME
+#pragma config OSCIOFNC = ON
+#pragma config FCKSM = CSECMD
+#pragma config XTCFG = G3
+#pragma config XTBST = DISABLE
 
+#pragma config RWDTPS = PS1048576
+#pragma config RCLKSEL = LPRC
 #pragma config FWDTEN = ON_SW
-#pragma config WINDIS = OFF
+#pragma config WINDIS = ON
+#pragma config WDTWIN = WIN25
+#pragma config SWDTPS = PS1048576
 
-#pragma config ICS = PGD1
+#pragma config BISTDIS = DISABLED
+
+#pragma config ICS = PGD3
 #pragma config JTAGEN = OFF
+#pragma config NOBTSWP = DISABLED
+
+#pragma config DMTIVTL = 0x0
+#pragma config DMTIVTH = 0x0
+#pragma config DMTCNTL = 0x0
+#pragma config DMTCNTH = 0x0
+#pragma config DMTDIS = OFF
+
+#pragma config ALTI2C1 = OFF
+#pragma config ALTI2C2 = OFF
+#pragma config ALTI2C3 = OFF
+#pragma config SMBEN = SMBUS
+#pragma config SPI2PIN = PPS
+
+#pragma config CTXT1 = OFF
+#pragma config CTXT2 = OFF
+#pragma config CTXT3 = OFF
+#pragma config CTXT4 = OFF
+
+#pragma config BSEQ = 0xFFF
+#pragma config IBSEQ = 0xFFF
 
 // *****************************************************************************
 // *****************************************************************************

@@ -23,6 +23,7 @@ static bool iotcConnected;
 static bool iotcModulePresent;
 static volatile uint32_t telemetryMilliseconds;
 static volatile uint32_t retryMilliseconds;
+static IOTC_RNWF11_Telemetry_t telemetry;
 static char lastResponse[IOTC_RNWF11_RESPONSE_SIZE];
 static bool lastOverrun;
 static bool mqttLinkUp;
@@ -346,9 +347,15 @@ static bool IOTC_RNWF11_PublishTelemetry(void)
         return false;
     }
 
-    /* Simple dummy telemetry, matching the other iotc quickstarts in this
-     * family - no real sensor is read here. */
-    iotcl_telemetry_set_number(msg, "random", (double)(rand() % 101));
+    iotcl_telemetry_set_number(msg, "run", telemetry.motorRunning);
+    iotcl_telemetry_set_number(msg, "st", telemetry.state);
+    iotcl_telemetry_set_number(msg, "sec", telemetry.sector);
+    iotcl_telemetry_set_number(msg, "rpm", telemetry.requestedSpeedRpm);
+    iotcl_telemetry_set_number(msg, "spd", telemetry.measuredSpeedRpm);
+    iotcl_telemetry_set_number(msg, "ic", telemetry.requestedCurrent);
+    iotcl_telemetry_set_number(msg, "im", telemetry.measuredCurrent);
+    iotcl_telemetry_set_number(msg, "duty", telemetry.dutyCycle);
+    iotcl_telemetry_set_number(msg, "vdc", telemetry.dcBusAdc);
 
     char *json = iotcl_telemetry_create_serialized_string(msg, false);
     iotcl_telemetry_destroy(msg);
@@ -461,6 +468,11 @@ void IOTC_RNWF11_Tick1ms(void)
 #endif
 }
 
+void IOTC_RNWF11_SetTelemetry(const IOTC_RNWF11_Telemetry_t *sample)
+{
+    telemetry = *sample;
+}
+
 /*
  * The module reports real connection state asynchronously; command replies only
  * say whether the command itself was accepted.
@@ -563,7 +575,9 @@ void IOTC_RNWF11_Task(void)
             return;
         }
         bool sent = IOTC_RNWF11_PublishTelemetry();
-        DEBUG_Printf("IOTC: publish %s\r\n", sent ? "ok" : "FAILED");
+        DEBUG_Printf("IOTC: publish %s state=%u rpm=%u duty=%d\r\n",
+                 sent ? "ok" : "FAILED",
+                 telemetry.state, telemetry.measuredSpeedRpm, telemetry.dutyCycle);
     }
 #endif
 }
