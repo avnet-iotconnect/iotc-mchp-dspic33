@@ -160,11 +160,10 @@ cloned:
 **Linux:**
 ```bash
 cd tools
+curl -fsSLO https://www.amazontrust.com/repository/AmazonRootCA1.pem
 ```
 ```bash
-curl -fsSLO https://www.amazontrust.com/repository/AmazonRootCA1.pem
-python3 provision_rnwf11_cert.py --port MYPORTNAME --duid MYUNIQUEID \
-    --ca-cert-path AmazonRootCA1.pem
+python3 provision_rnwf11_cert.py --port MYPORTNAME --duid MYUNIQUEID --ca-cert-path AmazonRootCA1.pem
 ```
 ```bash
 cd ..
@@ -173,11 +172,10 @@ cd ..
 **Windows (PowerShell):**
 ```powershell
 Set-Location tools
+Invoke-WebRequest https://www.amazontrust.com/repository/AmazonRootCA1.pem -OutFile AmazonRootCA1.pem
 ```
 ```powershell
-Invoke-WebRequest https://www.amazontrust.com/repository/AmazonRootCA1.pem -OutFile AmazonRootCA1.pem
-.\provision_rnwf11_cert.ps1 -Port MYPORTNAME -Duid MYUNIQUEID `
-    -CaCertPath AmazonRootCA1.pem
+.\provision_rnwf11_cert.ps1 -Port MYPORTNAME -Duid MYUNIQUEID -CaCertPath AmazonRootCA1.pem
 ```
 ```powershell
 Set-Location ..
@@ -264,8 +262,7 @@ values under **Settings &rarr; Key Vault** in the IoTConnect console, and
 cd tools
 ```
 ```bash
-python3 provision_device_config.py --port none --wifi-ssid x --wifi-password x \
-    --cpid MYCPID --env MYENVIRONMENT --duid MYUNIQUEID
+python3 provision_device_config.py --port none --wifi-ssid x --wifi-password x --cpid MYCPID --env MYENVIRONMENT --duid MYUNIQUEID
 ```
 ```bash
 cd ..
@@ -276,8 +273,7 @@ cd ..
 Set-Location tools
 ```
 ```powershell
-.\provision_device_config.ps1 -Port none -WifiSsid x -WifiPassword x `
-    -Cpid MYCPID -Env MYENVIRONMENT -Duid MYUNIQUEID
+.\provision_device_config.ps1 -Port none -WifiSsid x -WifiPassword x -Cpid MYCPID -Env MYENVIRONMENT -Duid MYUNIQUEID
 ```
 ```powershell
 Set-Location ..
